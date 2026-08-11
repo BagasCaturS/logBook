@@ -95,6 +95,11 @@ describe("formatMonthYear", () => {
     expect(formatMonthYear("2026-01-05")).toBe("Januari 2026");
     expect(formatMonthYear("2026-12-31")).toBe("Desember 2026");
   });
+
+  it("format bahasa Inggris", () => {
+    expect(formatMonthYear("2026-08-11", "en")).toBe("August 2026");
+    expect(formatTanggal("2026-08-11", "en")).toBe("11 Aug 2026");
+  });
 });
 
 describe("getMonthGrid", () => {

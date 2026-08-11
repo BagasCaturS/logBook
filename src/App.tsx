@@ -7,14 +7,23 @@ import SettingsView from "./components/SettingsView";
 import Setup from "./components/Setup";
 import CalendarView from "./components/CalendarView";
 import { IconBook, IconGear, IconRefresh } from "./components/icons";
-import { addEntry, deleteEntry, listEntries, updateEntry } from "./lib/db";
+import {
+  addCategory,
+  addEntry,
+  deleteCategory,
+  deleteEntry,
+  listCategories,
+  listEntries,
+  updateEntry,
+} from "./lib/db";
 import { formatDateTime } from "./lib/dates";
+import { t } from "./lib/i18n";
 import { getClient, getCurrentSession, onAuthChange, signIn, signOut, signUp } from "./lib/supabase";
 import { loadSettings, saveSettings } from "./lib/settings";
 import { syncNow } from "./lib/sync";
 import { DEFAULT_THEME } from "./lib/themes";
 import { checkForUpdate, downloadAndInstall } from "./lib/update";
-import type { AppSettings, EntryInput, LogbookEntry, SyncStatus } from "./lib/types";
+import type { AppSettings, Category, EntryInput, LogbookEntry, SyncStatus } from "./lib/types";
 import type { DownloadProgress, UpdateInfo } from "./lib/update";
 
 const SYNC_INTERVAL_MS = 30_000;
@@ -35,6 +44,7 @@ export default function App() {
   const [settings, setSettings] = useState<AppSettings>(initialSettings);
   const [session, setSession] = useState<{ userId: string; email: string | undefined } | null>(null);
   const [entries, setEntries] = useState<LogbookEntry[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [syncStatus, setSyncStatus] = useState<SyncStatus>({
     state: "offline",
     lastSyncAt: initialSettings.lastSyncAt,
@@ -43,6 +53,7 @@ export default function App() {
   const [editing, setEditing] = useState<LogbookEntry | null>(null);
   const [formDate, setFormDate] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<LogbookEntry | null>(null);
+  const [confirmDeleteCategory, setConfirmDeleteCategory] = useState<Category | null>(null);
   const [leavingId, setLeavingId] = useState<string | null>(null);
   const [dialogLeaving, setDialogLeaving] = useState(false);
   const [initializing, setInitializing] = useState(true);
@@ -62,6 +73,10 @@ export default function App() {
 
   const refreshEntries = useCallback(async (userId: string) => {
     setEntries(await listEntries(userId));
+  }, []);
+
+  const refreshCategories = useCallback(async (userId: string) => {
+    setCategories(await listCategories(userId));
   }, []);
 
   const runSync = useCallback(async () => {
@@ -118,17 +133,19 @@ export default function App() {
     };
   }, []);
 
-  // load entries + start sync loop when session appears
+  // load entries + categories, start sync loop when session appears
   useEffect(() => {
     if (!session) {
       setEntries([]);
+      setCategories([]);
       return;
     }
     void refreshEntries(session.userId);
+    void refreshCategories(session.userId);
     void runSync();
     const interval = window.setInterval(() => void runSync(), SYNC_INTERVAL_MS);
     return () => window.clearInterval(interval);
-  }, [session?.userId, refreshEntries, runSync]);
+  }, [session?.userId, refreshEntries, refreshCategories, runSync]);
 
   async function handleSaveSetup(url: string, key: string) {
     const next: AppSettings = { ...settingsRef.current, supabaseUrl: url, supabaseAnonKey: key };
@@ -143,7 +160,7 @@ export default function App() {
     if (res.error) {
       const msg = res.error.message;
       if (msg.toLowerCase().includes("invalid login credentials")) {
-        return "Email atau password salah.";
+        return t(s.lang, "login.errInvalid");
       }
       return msg;
     }
@@ -170,11 +187,20 @@ export default function App() {
     queueSync();
   }
 
+  async function handleCreateCategory(name: string) {
+    if (!session) return;
+    const cat = await addCategory(session.userId, name, pickCategoryColor(categories.length));
+    await refreshCategories(session.userId);
+    queueSync();
+    return cat;
+  }
+
   function closeDialog() {
     if (dialogLeaving) return;
     setDialogLeaving(true);
     window.setTimeout(() => {
       setConfirmDelete(null);
+      setConfirmDeleteCategory(null);
       setDialogLeaving(false);
     }, 170);
   }
@@ -191,6 +217,18 @@ export default function App() {
     await deleteEntry(id, session.userId);
     await refreshEntries(session.userId);
     setLeavingId(null);
+    queueSync();
+  }
+
+  async function handleConfirmDeleteCategory() {
+    if (!session || !confirmDeleteCategory || dialogLeaving) return;
+    const cat = confirmDeleteCategory;
+    setDialogLeaving(true);
+    await delay(170);
+    setConfirmDeleteCategory(null);
+    setDialogLeaving(false);
+    await deleteCategory(cat.id, session.userId);
+    await Promise.all([refreshCategories(session.userId), refreshEntries(session.userId)]);
     queueSync();
   }
 
@@ -222,22 +260,24 @@ export default function App() {
     }
   }
 
-  if (initializing) return <div className="setup">Memuat...</div>;
+  if (initializing) return <div className="setup">{t(settings.lang, "app.loading")}</div>;
 
   if (!settings.supabaseUrl || !settings.supabaseAnonKey) {
     return (
       <Setup
         initialUrl={settings.supabaseUrl}
         initialKey={settings.supabaseAnonKey}
+        lang={settings.lang}
         onSave={handleSaveSetup}
       />
     );
   }
 
   if (!session) {
-    return <Login onLogin={handleLogin} />;
+    return <Login lang={settings.lang} onLogin={handleLogin} />;
   }
 
+  const lang = settings.lang;
   const dotClass =
     syncStatus.state === "online"
       ? "dot online"
@@ -255,8 +295,8 @@ export default function App() {
             <IconBook size={24} />
           </div>
           <div>
-            <h1>Online Logbook</h1>
-            <p className="tagline">Jurnal kegiatan magang</p>
+            <h1>{t(lang, "app.title")}</h1>
+            <p className="tagline">{t(lang, "app.tagline")}</p>
           </div>
         </div>
         <div className="sync-info">
@@ -264,12 +304,14 @@ export default function App() {
             <span className={dotClass} title={syncStatus.error ?? syncStatus.state} />
             <span>
               {syncStatus.state === "syncing"
-                ? "menyinkronkan..."
+                ? t(lang, "sync.syncing")
                 : syncStatus.state === "online"
-                  ? `tersinkron ${syncStatus.lastSyncAt ? formatDateTime(syncStatus.lastSyncAt) : ""}`
+                  ? t(lang, "sync.online", {
+                      time: syncStatus.lastSyncAt ? formatDateTime(syncStatus.lastSyncAt) : "",
+                    })
                   : syncStatus.state === "error"
-                    ? "sinkron gagal (offline?)"
-                    : "offline"}
+                    ? t(lang, "sync.error")
+                    : t(lang, "sync.offline")}
             </span>
           </span>
           <button
@@ -277,11 +319,14 @@ export default function App() {
             disabled={syncStatus.state === "syncing"}
             onClick={async () => {
               await runSync();
-              if (session) await refreshEntries(session.userId);
+              if (session) {
+                await refreshEntries(session.userId);
+                await refreshCategories(session.userId);
+              }
             }}
           >
             <IconRefresh size={15} />
-            Sinkron Sekarang
+            {t(lang, "sync.now")}
           </button>
           <button
             className="secondary"
@@ -290,7 +335,7 @@ export default function App() {
             }}
           >
             <IconGear size={15} />
-            Pengaturan
+            {t(lang, "settings.button")}
           </button>
         </div>
       </header>
@@ -299,11 +344,13 @@ export default function App() {
         <SettingsView
           startDate={settings.startDate}
           theme={settings.theme}
+          lang={lang}
           email={session.email}
           lastSyncAt={syncStatus.lastSyncAt}
           syncState={syncStatus.state}
           syncError={syncStatus.error}
           appVersion={appVersion}
+          categories={categories}
           updateInfo={updateInfo}
           updateState={updateState}
           updateError={updateError}
@@ -320,6 +367,12 @@ export default function App() {
             saveSettings(next);
             setSettings(next);
           }}
+          onSaveLang={(l) => {
+            const next = { ...settingsRef.current, lang: l };
+            saveSettings(next);
+            setSettings(next);
+          }}
+          onDeleteCategory={(c) => setConfirmDeleteCategory(c)}
           onLogout={() => void handleLogout()}
           onBack={() => setView("main")}
         />
@@ -328,11 +381,11 @@ export default function App() {
           {updateInfo && updateState !== "downloading" && (
             <div className="update-banner m-b" role="status">
               <div className="update-banner-text">
-                <strong>Update v{updateInfo.version} tersedia</strong>
+                <strong>{t(lang, "update.available", { version: updateInfo.version })}</strong>
                 <span>
                   {updateState === "ready"
-                    ? `Update terpasang — buka ulang aplikasi untuk memakai v${updateInfo.version}.`
-                    : "Unduh dan pasang versi terbaru dari tombol di samping."}
+                    ? t(lang, "update.readyText", { version: updateInfo.version })
+                    : t(lang, "update.availableText")}
                 </span>
               </div>
               <button
@@ -340,7 +393,7 @@ export default function App() {
                 disabled={updateState === "ready"}
                 onClick={() => void handleInstallUpdate()}
               >
-                {updateState === "ready" ? "Terpasang" : "Pasang Sekarang"}
+                {updateState === "ready" ? t(lang, "update.installed") : t(lang, "update.install")}
               </button>
             </div>
           )}
@@ -348,7 +401,10 @@ export default function App() {
             startDate={settings.startDate}
             editing={editing}
             initialDate={formDate}
+            categories={categories}
+            lang={lang}
             onSave={handleSaveEntry}
+            onCreateCategory={handleCreateCategory}
             onCancel={() => {
               setEditing(null);
               setFormDate(null);
@@ -357,8 +413,10 @@ export default function App() {
           
           <CalendarView
             entries={entries}
+            categories={categories}
             startDate={settings.startDate}
             leavingId={leavingId}
+            lang={lang}
             onAdd={(date) => {
               setEditing(null);
               setFormDate(date);
@@ -372,7 +430,9 @@ export default function App() {
           />
           <EntryList
             entries={entries}
+            categories={categories}
             leavingId={leavingId}
+            lang={lang}
             onEdit={(e) => {
               setEditing(e);
               window.scrollTo({ top: 0, behavior: "smooth" });
@@ -382,24 +442,64 @@ export default function App() {
         </main>
       )}
 
-      {confirmDelete && (
+      {(confirmDelete || confirmDeleteCategory) && (
         <div className={`overlay${dialogLeaving ? " leaving" : ""}`}>
           <div className={`dialog${dialogLeaving ? " leaving" : ""}`}>
-            <p>Hapus catatan ini?</p>
-            <p className="dialog-sub">{confirmDelete.kegiatan}</p>
+            <p>
+              {confirmDeleteCategory
+                ? t(lang, "settings.deleteCategoryConfirm")
+                : t(lang, "dialog.deleteEntry")}
+            </p>
+            {confirmDelete && <p className="dialog-sub">{confirmDelete.kegiatan}</p>}
+            {confirmDeleteCategory && (
+              <p className="dialog-sub">
+                <span
+                  className="cat-chip"
+                  style={{ background: confirmDeleteCategory.color, color: "#fff" }}
+                >
+                  {confirmDeleteCategory.name}
+                </span>
+              </p>
+            )}
             <div className="row actions">
-              <button className="danger-btn" onClick={() => void handleConfirmDelete()}>
-                Hapus
+              <button
+                className="danger-btn"
+                onClick={() =>
+                  confirmDeleteCategory
+                    ? void handleConfirmDeleteCategory()
+                    : void handleConfirmDelete()
+                }
+              >
+                {t(lang, "dialog.delete")}
               </button>
               <button className="secondary" onClick={closeDialog}>
-                Batal
+                {t(lang, "dialog.cancel")}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      <footer className="app-footer">Online Logbook v{appVersion} · Dibuat oleh Sapporo</footer>
+      <footer className="app-footer">
+        {t(lang, "app.footer", { version: appVersion })}
+      </footer>
     </div>
   );
+}
+
+const CATEGORY_PALETTE = [
+  "#6366f1",
+  "#ea580c",
+  "#15803d",
+  "#dc2626",
+  "#0d9488",
+  "#b45309",
+  "#9333ea",
+  "#0369a1",
+  "#be123c",
+  "#65a30d",
+];
+
+function pickCategoryColor(index: number): string {
+  return CATEGORY_PALETTE[index % CATEGORY_PALETTE.length];
 }

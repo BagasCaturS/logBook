@@ -1,5 +1,48 @@
 const MS_PER_DAY = 86_400_000;
 
+import type { Lang } from "./i18n";
+
+const MONTHS_SHORT: Record<Lang, string[]> = {
+  id: ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"],
+  en: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
+};
+
+const MONTHS_FULL: Record<Lang, string[]> = {
+  id: [
+    "Januari",
+    "Februari",
+    "Maret",
+    "April",
+    "Mei",
+    "Juni",
+    "Juli",
+    "Agustus",
+    "September",
+    "Oktober",
+    "November",
+    "Desember",
+  ],
+  en: [
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
+  ],
+};
+
+export const WEEKDAYS_SHORT: Record<Lang, string[]> = {
+  id: ["Sen", "Sel", "Rab", "Kam", "Jum", "Sab", "Min"],
+  en: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+};
+
 export interface MingguInfo {
   minggu: number | null;
   hariKe: number | null;
@@ -24,31 +67,15 @@ export function nowIso(): string {
   return new Date().toISOString();
 }
 
-export function formatTanggal(s: string): string {
+export function formatTanggal(s: string, lang: Lang = "id"): string {
   const [y, m, d] = s.slice(0, 10).split("-");
-  const months = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"];
-  const month = months[Number(m) - 1] ?? m;
+  const month = MONTHS_SHORT[lang][Number(m) - 1] ?? m;
   return `${Number(d)} ${month} ${y}`;
 }
 
-export const MONTH_NAMES_FULL = [
-  "Januari",
-  "Februari",
-  "Maret",
-  "April",
-  "Mei",
-  "Juni",
-  "Juli",
-  "Agustus",
-  "September",
-  "Oktober",
-  "November",
-  "Desember",
-];
-
-export function formatMonthYear(s: string): string {
+export function formatMonthYear(s: string, lang: Lang = "id"): string {
   const [y, m] = s.slice(0, 10).split("-");
-  const month = MONTH_NAMES_FULL[Number(m) - 1] ?? m;
+  const month = MONTHS_FULL[lang][Number(m) - 1] ?? m;
   return `${month} ${y}`;
 }
 

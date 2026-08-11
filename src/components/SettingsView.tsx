@@ -1,17 +1,21 @@
 import { useEffect, useState } from "react";
 import { formatDateTime } from "../lib/dates";
 import { THEMES } from "../lib/themes";
+import { LANGS, t, type Lang } from "../lib/i18n";
 import { IconRefresh, IconLogout } from "./icons";
+import type { Category } from "../lib/types";
 import type { DownloadProgress, UpdateInfo } from "../lib/update";
 
 interface Props {
   startDate: string;
   theme: string;
+  lang: Lang;
   email: string | undefined;
   lastSyncAt: string | null;
   syncState: string;
   syncError?: string;
   appVersion: string;
+  categories: Category[];
   updateInfo: UpdateInfo | null;
   updateState: string;
   updateError: string | null;
@@ -20,6 +24,8 @@ interface Props {
   onInstallUpdate: () => void;
   onSaveStartDate: (d: string) => void;
   onSaveTheme: (id: string) => void;
+  onSaveLang: (l: Lang) => void;
+  onDeleteCategory: (c: Category) => void;
   onLogout: () => void;
   onBack: () => void;
 }
@@ -27,11 +33,13 @@ interface Props {
 export default function SettingsView({
   startDate,
   theme,
+  lang,
   email,
   lastSyncAt,
   syncState,
   syncError,
   appVersion,
+  categories,
   updateInfo,
   updateState,
   updateError,
@@ -40,6 +48,8 @@ export default function SettingsView({
   onInstallUpdate,
   onSaveStartDate,
   onSaveTheme,
+  onSaveLang,
+  onDeleteCategory,
   onLogout,
   onBack,
 }: Props) {
@@ -67,38 +77,47 @@ export default function SettingsView({
 
   return (
     <div className="form">
-      <h3>Pengaturan</h3>
+      <h3>{t(lang, "settings.title")}</h3>
 
       <div className="theme-picker">
-        <label>Tema aplikasi</label>
+        <label>{t(lang, "settings.theme")}</label>
         <div className="theme-grid">
-          {THEMES.map((t) => (
+          {THEMES.map((th) => (
             <button
-              key={t.id}
-              className={`theme-card${t.id === theme ? " active" : ""}`}
-              onClick={() => onSaveTheme(t.id)}
-              aria-pressed={t.id === theme}
-              aria-label={`Pilih tema ${t.name}`}
+              key={th.id}
+              className={`theme-card${th.id === theme ? " active" : ""}`}
+              onClick={() => onSaveTheme(th.id)}
+              aria-pressed={th.id === theme}
+              aria-label={`${t(lang, "settings.theme")}: ${th.name}`}
             >
               <span className="swatches" aria-hidden>
-                {t.colors.map((c) => (
+                {th.colors.map((c) => (
                   <span key={c} className="swatch" style={{ background: c }} />
                 ))}
               </span>
-              <span className="theme-name">{t.name}</span>
+              <span className="theme-name">{th.name}</span>
             </button>
           ))}
         </div>
       </div>
 
       <label>
-        Tanggal mulai magang (untuk auto-hitung minggu)
+        {t(lang, "settings.lang")}
+        <select value={lang} onChange={(e) => onSaveLang(e.target.value as Lang)}>
+          {LANGS.map((l) => (
+            <option key={l.id} value={l.id}>
+              {l.name}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <label>
+        {t(lang, "settings.startDate")}
         <input type="date" value={draft} onChange={(e) => setDraft(e.target.value)} />
       </label>
       {draft && (
-        <p className="hint">
-          Entri baru akan otomatis dihitung minggu ke-? dan hari ke-N dari tanggal ini.
-        </p>
+        <p className="hint">{t(lang, "settings.startDateHint")}</p>
       )}
       <div className="row actions">
         <button
@@ -108,10 +127,10 @@ export default function SettingsView({
             setSavedPhase("show");
           }}
         >
-          Simpan
+          {t(lang, "settings.save")}
         </button>
         <button className="secondary" onClick={onBack}>
-          Kembali
+          {t(lang, "settings.back")}
         </button>
       </div>
       {savedPhase && (
@@ -119,17 +138,38 @@ export default function SettingsView({
           className={`info saved-toast${savedPhase === "leave" ? " leaving" : ""}`}
           role="status"
         >
-          Tersimpan
+          {t(lang, "form.saved")}
         </p>
+      )}
+      <hr />
+      <h3>{t(lang, "settings.categoriesTitle")}</h3>
+      <p className="hint">{t(lang, "settings.categoriesHint")}</p>
+      {categories.length === 0 ? (
+        <p className="hint">{t(lang, "settings.noCategories")}</p>
+      ) : (
+        <ul className="cat-manage-list">
+          {categories.map((c) => (
+            <li key={c.id}>
+              <span className="cat-chip" style={{ background: c.color, color: "#fff" }}>
+                {c.name}
+              </span>
+              <button className="link danger" onClick={() => onDeleteCategory(c)}>
+                {t(lang, "list.delete")}
+              </button>
+            </li>
+          ))}
+        </ul>
       )}
       <hr />
       <div className="settings-meta">
         <p>
-          <strong>Akun</strong> {email ?? "-"}
+          <strong>{t(lang, "settings.account")}</strong> {email ?? "-"}
         </p>
         <p>
-          <strong>Status sinkron</strong> {syncState}
-          {lastSyncAt ? ` · terakhir ${formatDateTime(lastSyncAt)}` : ""}
+          <strong>{t(lang, "settings.syncStatus")}</strong> {syncState}
+          {lastSyncAt
+            ? ` · ${t(lang, "settings.lastSync", { time: formatDateTime(lastSyncAt) })}`
+            : ""}
         </p>
       </div>
       {syncError && (
@@ -140,26 +180,27 @@ export default function SettingsView({
       <div className="row actions">
         <button className="secondary" onClick={onLogout}>
           <IconLogout size={15} />
-          Logout
+          {t(lang, "settings.logout")}
         </button>
       </div>
       <hr />
-      <h3>Pembaruan</h3>
+      <h3>{t(lang, "settings.update")}</h3>
       <p className="settings-meta">
-        <strong>Versi terpasang</strong> {appVersion || "-"}
+        <strong>{t(lang, "settings.version")}</strong> {appVersion || "-"}
         {updateInfo && (
           <span>
-            . Versi tersedia: <span className="badge">v{updateInfo.version}</span>
+            . {t(lang, "settings.versionAvailable")}{" "}
+            <span className="badge">v{updateInfo.version}</span>
           </span>
         )}
       </p>
       {updateInfo && (
-        <div className="changelog">{updateInfo.body || "Rilis baru tersedia."}</div>
+        <div className="changelog">{updateInfo.body || t(lang, "settings.newRelease")}</div>
       )}
-      {updateState === "checking" && <p className="hint">Memeriksa update...</p>}
+      {updateState === "checking" && <p className="hint">{t(lang, "settings.checking")}</p>}
       {updateState === "up-to-date" && (
         <p className="info" role="status">
-          Sudah versi terbaru
+          {t(lang, "settings.upToDate")}
         </p>
       )}
       {updateState === "downloading" && (
@@ -169,41 +210,42 @@ export default function SettingsView({
               <div className="progress">
                 <span style={{ width: `${pct}%` }} />
               </div>
-              <p className="hint">Mengunduh update... {pct}%</p>
+              <p className="hint">{t(lang, "settings.downloading", { pct })}</p>
             </>
           ) : (
             <>
               <div className="progress indeterminate">
                 <span />
               </div>
-              <p className="hint">Mengunduh update...</p>
+              <p className="hint">{t(lang, "settings.downloadingIndet")}</p>
             </>
           )}
         </div>
       )}
       {updateState === "ready" && (
         <p className="info" role="status">
-          Update terpasang — buka ulang aplikasi untuk memakai versi terbaru.
+          {t(lang, "settings.ready")}
         </p>
       )}
       {updateState === "error" && (
         <p className="error" role="alert">
-          Gagal memasang update: {updateError}
+          {t(lang, "settings.updateError", { error: updateError ?? "-" })}
         </p>
       )}
       <div className="row actions">
         <button className="secondary" disabled={busy} onClick={onCheckUpdate}>
           <IconRefresh size={15} />
-          Periksa Update
+          {t(lang, "settings.checkUpdate")}
         </button>
         {updateInfo && !busy && updateState !== "ready" && (
-          <button onClick={onInstallUpdate}>Unduh & Pasang</button>
+          <button onClick={onInstallUpdate}>{t(lang, "settings.downloadInstall")}</button>
         )}
       </div>
       <hr />
-      <h3>Tentang</h3>
+      <h3>{t(lang, "settings.about")}</h3>
       <p className="settings-meta">
-        <strong>Dibuat oleh</strong> Sapporo · © 2026 — Online Logbook v{appVersion || "-"}
+        <strong>{t(lang, "settings.madeBy")}</strong>{" "}
+        {t(lang, "settings.aboutLine", { version: appVersion || "-" })}
       </p>
     </div>
   );

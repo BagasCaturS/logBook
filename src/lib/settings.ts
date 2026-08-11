@@ -1,5 +1,6 @@
 import type { AppSettings } from "./types";
 import { DEFAULT_THEME, isValidTheme } from "./themes";
+import { isValidLang } from "./i18n";
 
 const KEY = "logbook.settings.v1";
 
@@ -9,6 +10,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   startDate: "",
   lastSyncAt: null,
   theme: DEFAULT_THEME,
+  lang: "id",
 };
 
 export function loadSettings(): AppSettings {
@@ -24,6 +26,8 @@ export function loadSettings(): AppSettings {
       supabaseAnonKey: stored.supabaseAnonKey || DEFAULT_SETTINGS.supabaseAnonKey,
       // unknown/stale theme ids fall back to the default
       theme: isValidTheme(stored.theme) ? stored.theme : DEFAULT_THEME,
+      // unknown language falls back to Indonesian
+      lang: isValidLang(stored.lang) ? stored.lang : DEFAULT_SETTINGS.lang,
     };
   } catch {
     return { ...DEFAULT_SETTINGS };

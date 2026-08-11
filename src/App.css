@@ -877,6 +877,11 @@ hr {
   flex: 0 0 140px;
 }
 
+.filters select {
+  flex: 0 1 180px;
+  min-width: 0;
+}
+
 .empty {
   color: var(--muted);
   text-align: center;
@@ -1010,6 +1015,91 @@ li.removing .entry-card {
   gap: 14px;
   flex-wrap: wrap;
   justify-content: center;
+}
+
+/* ---------- Categories ---------- */
+
+.cat-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.cat-label {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.cat-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.cat-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text);
+  background: color-mix(in srgb, var(--border) 55%, transparent);
+  border: 1px solid transparent;
+  cursor: pointer;
+  font: inherit;
+  transition: transform 150ms ease, filter 150ms ease, opacity 150ms ease;
+}
+
+.cat-chip:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.05);
+}
+
+.cat-chips-card {
+  margin-top: 8px;
+}
+
+.cat-chips-card .cat-chip {
+  cursor: default;
+  pointer-events: none;
+  filter: none;
+}
+
+.cat-new {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+  align-items: center;
+  animation: riseIn 200ms ease-out both;
+}
+
+.cat-new input {
+  flex: 1;
+  min-width: 0;
+}
+
+.cat-manage-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cat-manage-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 8px 12px;
 }
 
 /* ---------- Calendar ---------- */
@@ -1567,6 +1657,10 @@ main,
   }
 
   .filters input[type="number"] {
+    flex: 1;
+  }
+
+  .filters select {
     flex: 1;
   }
 

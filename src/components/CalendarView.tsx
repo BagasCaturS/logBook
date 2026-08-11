@@ -1,37 +1,41 @@
 import { useMemo, useState } from "react";
-import type { LogbookEntry } from "../lib/types";
+import type { Category, LogbookEntry } from "../lib/types";
 import {
   computeMinggu,
   formatMonthYear,
   formatTanggal,
   getMonthGrid,
   todayIso,
+  WEEKDAYS_SHORT,
 } from "../lib/dates";
+import { t, type Lang } from "../lib/i18n";
 import { IconChevronLeft, IconChevronRight, IconPencil, IconPlus, IconTrash } from "./icons";
 
 interface Props {
   entries: LogbookEntry[];
+  categories: Category[];
   startDate: string;
   leavingId?: string | null;
+  lang: Lang;
   onAdd: (date: string) => void;
   onEdit: (e: LogbookEntry) => void;
   onDelete: (e: LogbookEntry) => void;
 }
 
-const WEEKDAYS = ["Sen", "Sel", "Rab", "Kam", "Jum", "Sab", "Min"];
-
 export default function CalendarView({
   entries,
+  categories,
   startDate,
   leavingId,
+  lang,
   onAdd,
   onEdit,
   onDelete,
 }: Props) {
   const now = todayIso();
   const [cursor, setCursor] = useState(() => {
-    const t = new Date();
-    return { year: t.getFullYear(), month: t.getMonth() };
+    const nowD = new Date();
+    return { year: nowD.getFullYear(), month: nowD.getMonth() };
   });
   const [selected, setSelected] = useState(now);
 
@@ -47,6 +51,11 @@ export default function CalendarView({
     return map;
   }, [entries]);
 
+  const catById = useMemo(
+    () => new Map(categories.map((c) => [c.id, c])),
+    [categories]
+  );
+
   const selectedEntries = byDate.get(selected) ?? [];
   const mingguInfo = useMemo(
     () => computeMinggu(selected, startDate),
@@ -61,31 +70,31 @@ export default function CalendarView({
   }
 
   function goToday() {
-    const t = new Date();
-    setCursor({ year: t.getFullYear(), month: t.getMonth() });
+    const d = new Date();
+    setCursor({ year: d.getFullYear(), month: d.getMonth() });
     setSelected(now);
   }
 
   return (
-    <section className="m-t card calendar-section" aria-label="Kalender kegiatan">
+    <section className="m-t card calendar-section" aria-label={t(lang, "cal.title")}>
       <div className="cal-head">
-        <h3>Kalender Kegiatan</h3>
+        <h3>{t(lang, "cal.title")}</h3>
         <div className="cal-nav">
-          <button className="icon-btn secondary" onClick={() => goMonth(-1)} aria-label="Bulan sebelumnya">
+          <button className="icon-btn secondary" onClick={() => goMonth(-1)} aria-label={t(lang, "cal.prev")}>
             <IconChevronLeft size={16} />
           </button>
           <button className="secondary" onClick={goToday}>
-            Hari ini
+            {t(lang, "cal.today")}
           </button>
-          <button className="icon-btn secondary" onClick={() => goMonth(1)} aria-label="Bulan berikutnya">
+          <button className="icon-btn secondary" onClick={() => goMonth(1)} aria-label={t(lang, "cal.next")}>
             <IconChevronRight size={16} />
           </button>
         </div>
       </div>
-      <p className="cal-month-title">{formatMonthYear(`${cursor.year}-${cursor.month + 1}-01`)}</p>
+      <p className="cal-month-title">{formatMonthYear(`${cursor.year}-${cursor.month + 1}-01`, lang)}</p>
 
       <div className="cal-weekdays">
-        {WEEKDAYS.map((w) => (
+        {WEEKDAYS_SHORT[lang].map((w) => (
           <span key={w}>{w}</span>
         ))}
       </div>
@@ -105,7 +114,11 @@ export default function CalendarView({
               className={classes.join(" ")}
               style={{ animationDelay: `${i * 12}ms` }}
               onClick={() => setSelected(cell.date)}
-              aria-label={`${formatTanggal(cell.date)}${count > 0 ? `, ${count} kegiatan` : ""}`}
+              aria-label={
+                count > 0
+                  ? t(lang, "cal.dayAria", { tanggal: formatTanggal(cell.date, lang), count })
+                  : formatTanggal(cell.date, lang)
+              }
             >
               <span className="cal-day-num">{Number(cell.date.slice(8, 10))}</span>
               {count > 0 && (
@@ -122,20 +135,20 @@ export default function CalendarView({
       <div className="day-panel" key={selected}>
         <div className="day-panel-head">
           <div>
-            <strong>{formatTanggal(selected)}</strong>
+            <strong>{formatTanggal(selected, lang)}</strong>
             {mingguInfo.minggu !== null && (
               <span className="day-meta">
-                Minggu ke-{mingguInfo.minggu} · Hari ke-{mingguInfo.hariKe}
+                {t(lang, "cal.meta", { minggu: mingguInfo.minggu, hari: mingguInfo.hariKe ?? "-" })}
               </span>
             )}
           </div>
           <button className="secondary" onClick={() => onAdd(selected)}>
             <IconPlus size={14} />
-            Tambah Kegiatan
+            {t(lang, "cal.addActivity")}
           </button>
         </div>
         {selectedEntries.length === 0 ? (
-          <p className="empty">Tidak ada kegiatan pada tanggal ini.</p>
+          <p className="empty">{t(lang, "cal.emptyDay")}</p>
         ) : (
           <ul className="list">
             {selectedEntries.map((e) => (
@@ -143,29 +156,41 @@ export default function CalendarView({
                 <div className="entry-collapse">
                   <div className="entry-card">
                     <div className="entry-head">
-                      <span className="badge">Minggu {e.minggu}</span>
+                      <span className="badge">{t(lang, "list.mingguBadge", { minggu: e.minggu })}</span>
                       {e.hari_ke !== null && (
-                        <span className="badge violet">Hari ke-{e.hari_ke}</span>
+                        <span className="badge violet">{t(lang, "list.hariBadge", { hari: e.hari_ke })}</span>
                       )}
                       <span className="spacer" />
                       <button
                         className="link"
                         onClick={() => onEdit(e)}
-                        aria-label={`Edit: ${e.kegiatan.slice(0, 40)}`}
+                        aria-label={`${t(lang, "list.edit")}: ${e.kegiatan.slice(0, 40)}`}
                       >
                         <IconPencil size={13} />
-                        Edit
+                        {t(lang, "list.edit")}
                       </button>
                       <button
                         className="link danger"
                         onClick={() => onDelete(e)}
-                        aria-label={`Hapus: ${e.kegiatan.slice(0, 40)}`}
+                        aria-label={`${t(lang, "list.delete")}: ${e.kegiatan.slice(0, 40)}`}
                       >
                         <IconTrash size={13} />
-                        Hapus
+                        {t(lang, "list.delete")}
                       </button>
                     </div>
                     <div className="kegiatan">{e.kegiatan}</div>
+                    {(e.category_ids ?? []).length > 0 && (
+                      <div className="cat-chips cat-chips-card">
+                        {e.category_ids.map((id) => {
+                          const c = catById.get(id);
+                          return c ? (
+                            <span key={id} className="cat-chip" style={{ background: c.color, color: "#fff" }}>
+                              {c.name}
+                            </span>
+                          ) : null;
+                        })}
+                      </div>
+                    )}
                   </div>
                 </div>
               </li>

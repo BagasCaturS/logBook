@@ -1,3 +1,5 @@
+import type { Lang } from "./i18n";
+
 export interface LogbookEntry {
   id: string;
   user_id: string;
@@ -5,6 +7,7 @@ export interface LogbookEntry {
   tanggal: string; // YYYY-MM-DD (local date)
   minggu: number;
   hari_ke: number | null;
+  category_ids: string[];
   created_at: string; // ISO UTC
   updated_at: string; // ISO UTC
   deleted: boolean;
@@ -16,6 +19,18 @@ export interface EntryInput {
   tanggal: string;
   minggu: number;
   hari_ke: number | null;
+  category_ids: string[];
+}
+
+export interface Category {
+  id: string;
+  user_id: string;
+  name: string;
+  color: string;
+  created_at: string;
+  updated_at: string;
+  deleted: boolean;
+  dirty: boolean;
 }
 
 export interface AppSettings {
@@ -24,6 +39,7 @@ export interface AppSettings {
   startDate: string; // YYYY-MM-DD or '' when not set
   lastSyncAt: string | null;
   theme: string;
+  lang: Lang;
 }
 
 export type SyncState = "online" | "offline" | "syncing" | "error";
@@ -41,6 +57,17 @@ export interface RemoteEntry {
   tanggal: string;
   minggu: number;
   hari_ke: number | null;
+  category_ids?: string | string[] | null;
+  created_at: string;
+  updated_at: string;
+  deleted: boolean;
+}
+
+export interface RemoteCategory {
+  id: string;
+  user_id: string;
+  name: string;
+  color: string;
   created_at: string;
   updated_at: string;
   deleted: boolean;
