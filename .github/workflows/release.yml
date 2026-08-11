@@ -54,7 +54,7 @@ jobs:
         with:
           tagName: ${{ github.ref_name }}
           releaseName: "Online Logbook ${{ github.ref_name }}"
-          releaseBody: "Rilis otomatis dari tag ${{ github.ref_name }}."
+          releaseBody: ${{ github.event.head_commit.message || 'Rilis otomatis.' }}
           releaseDraft: false
           prerelease: false
           includeUpdaterJson: true
