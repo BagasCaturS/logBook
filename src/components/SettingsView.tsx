@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { formatDateTime } from "../lib/dates";
 import { THEMES } from "../lib/themes";
-import { IconLogout } from "./icons";
+import { IconRefresh, IconLogout } from "./icons";
+import type { DownloadProgress, UpdateInfo } from "../lib/update";
 
 interface Props {
   startDate: string;
@@ -10,6 +11,13 @@ interface Props {
   lastSyncAt: string | null;
   syncState: string;
   syncError?: string;
+  appVersion: string;
+  updateInfo: UpdateInfo | null;
+  updateState: string;
+  updateError: string | null;
+  downloadProgress: DownloadProgress;
+  onCheckUpdate: () => void;
+  onInstallUpdate: () => void;
   onSaveStartDate: (d: string) => void;
   onSaveTheme: (id: string) => void;
   onLogout: () => void;
@@ -23,6 +31,13 @@ export default function SettingsView({
   lastSyncAt,
   syncState,
   syncError,
+  appVersion,
+  updateInfo,
+  updateState,
+  updateError,
+  downloadProgress,
+  onCheckUpdate,
+  onInstallUpdate,
   onSaveStartDate,
   onSaveTheme,
   onLogout,
@@ -43,6 +58,12 @@ export default function SettingsView({
     }
     return undefined;
   }, [savedPhase]);
+
+  const pct =
+    downloadProgress.total && downloadProgress.total > 0
+      ? Math.min(100, Math.round((downloadProgress.downloaded / downloadProgress.total) * 100))
+      : null;
+  const busy = updateState === "checking" || updateState === "downloading";
 
   return (
     <div className="form">
@@ -121,6 +142,63 @@ export default function SettingsView({
           <IconLogout size={15} />
           Logout
         </button>
+      </div>
+      <hr />
+      <h3>Pembaruan</h3>
+      <p className="settings-meta">
+        <strong>Versi terpasang</strong> {appVersion || "-"}
+        {updateInfo && (
+          <span>
+            . Versi tersedia: <span className="badge">v{updateInfo.version}</span>
+          </span>
+        )}
+      </p>
+      {updateInfo && (
+        <div className="changelog">{updateInfo.body || "Rilis baru tersedia."}</div>
+      )}
+      {updateState === "checking" && <p className="hint">Memeriksa update...</p>}
+      {updateState === "up-to-date" && (
+        <p className="info" role="status">
+          Sudah versi terbaru
+        </p>
+      )}
+      {updateState === "downloading" && (
+        <div className="update-download">
+          {pct !== null ? (
+            <>
+              <div className="progress">
+                <span style={{ width: `${pct}%` }} />
+              </div>
+              <p className="hint">Mengunduh update... {pct}%</p>
+            </>
+          ) : (
+            <>
+              <div className="progress indeterminate">
+                <span />
+              </div>
+              <p className="hint">Mengunduh update...</p>
+            </>
+          )}
+        </div>
+      )}
+      {updateState === "ready" && (
+        <p className="info" role="status">
+          Update terpasang — buka ulang aplikasi untuk memakai versi terbaru.
+        </p>
+      )}
+      {updateState === "error" && (
+        <p className="error" role="alert">
+          Gagal memasang update: {updateError}
+        </p>
+      )}
+      <div className="row actions">
+        <button className="secondary" disabled={busy} onClick={onCheckUpdate}>
+          <IconRefresh size={15} />
+          Periksa Update
+        </button>
+        {updateInfo && !busy && updateState !== "ready" && (
+          <button onClick={onInstallUpdate}>Unduh & Pasang</button>
+        )}
       </div>
     </div>
   );

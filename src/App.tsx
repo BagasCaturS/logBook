@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { getVersion } from "@tauri-apps/api/app";
 import EntryForm from "./components/EntryForm";
 import EntryList from "./components/EntryList";
 import Login from "./components/Login";
@@ -11,11 +12,22 @@ import { getClient, getCurrentSession, onAuthChange, signIn, signOut, signUp } f
 import { loadSettings, saveSettings } from "./lib/settings";
 import { syncNow } from "./lib/sync";
 import { DEFAULT_THEME } from "./lib/themes";
+import { checkForUpdate, downloadAndInstall } from "./lib/update";
 import type { AppSettings, EntryInput, LogbookEntry, SyncStatus } from "./lib/types";
+import type { DownloadProgress, UpdateInfo } from "./lib/update";
 
 const SYNC_INTERVAL_MS = 30_000;
 
 const delay = (ms: number) => new Promise<void>((resolve) => window.setTimeout(resolve, ms));
+
+type UpdateState =
+  | "idle"
+  | "checking"
+  | "available"
+  | "up-to-date"
+  | "downloading"
+  | "ready"
+  | "error";
 
 export default function App() {
   const [initialSettings] = useState(() => loadSettings());
@@ -32,6 +44,14 @@ export default function App() {
   const [leavingId, setLeavingId] = useState<string | null>(null);
   const [dialogLeaving, setDialogLeaving] = useState(false);
   const [initializing, setInitializing] = useState(true);
+  const [appVersion, setAppVersion] = useState("");
+  const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
+  const [updateState, setUpdateState] = useState<UpdateState>("idle");
+  const [updateError, setUpdateError] = useState<string | null>(null);
+  const [downloadProgress, setDownloadProgress] = useState<DownloadProgress>({
+    downloaded: 0,
+    total: null,
+  });
 
   const settingsRef = useRef(settings);
   settingsRef.current = settings;
@@ -65,6 +85,17 @@ export default function App() {
   useEffect(() => {
     document.documentElement.dataset.theme = settings.theme || DEFAULT_THEME;
   }, [settings.theme]);
+
+  // check for updates on boot
+  useEffect(() => {
+    void getVersion().then(setAppVersion);
+    void checkForUpdate().then((info) => {
+      if (info) {
+        setUpdateInfo(info);
+        setUpdateState("available");
+      }
+    });
+  }, []);
 
   // restore session on boot
   useEffect(() => {
@@ -166,6 +197,28 @@ export default function App() {
     setView("main");
   }
 
+  async function handleCheckUpdate() {
+    setUpdateState("checking");
+    setUpdateError(null);
+    const info = await checkForUpdate();
+    setUpdateInfo(info);
+    setUpdateState(info ? "available" : "up-to-date");
+  }
+
+  async function handleInstallUpdate() {
+    if (!updateInfo) return;
+    setUpdateState("downloading");
+    setUpdateError(null);
+    setDownloadProgress({ downloaded: 0, total: null });
+    try {
+      await downloadAndInstall((p) => setDownloadProgress(p));
+      setUpdateState("ready");
+    } catch (e) {
+      setUpdateState("error");
+      setUpdateError(e instanceof Error ? e.message : String(e));
+    }
+  }
+
   if (initializing) return <div className="setup">Memuat...</div>;
 
   if (!settings.supabaseUrl || !settings.supabaseAnonKey) {
@@ -247,6 +300,13 @@ export default function App() {
           lastSyncAt={syncStatus.lastSyncAt}
           syncState={syncStatus.state}
           syncError={syncStatus.error}
+          appVersion={appVersion}
+          updateInfo={updateInfo}
+          updateState={updateState}
+          updateError={updateError}
+          downloadProgress={downloadProgress}
+          onCheckUpdate={() => void handleCheckUpdate()}
+          onInstallUpdate={() => void handleInstallUpdate()}
           onSaveStartDate={(d) => {
             const next = { ...settingsRef.current, startDate: d };
             saveSettings(next);
@@ -262,6 +322,25 @@ export default function App() {
         />
       ) : (
         <main>
+          {updateInfo && updateState !== "downloading" && (
+            <div className="update-banner" role="status">
+              <div className="update-banner-text">
+                <strong>Update v{updateInfo.version} tersedia</strong>
+                <span>
+                  {updateState === "ready"
+                    ? `Update terpasang — buka ulang aplikasi untuk memakai v${updateInfo.version}.`
+                    : "Unduh dan pasang versi terbaru dari tombol di samping."}
+                </span>
+              </div>
+              <button
+                className="secondary"
+                disabled={updateState === "ready"}
+                onClick={() => void handleInstallUpdate()}
+              >
+                {updateState === "ready" ? "Terpasang" : "Pasang Sekarang"}
+              </button>
+            </div>
+          )}
           <EntryForm
             startDate={settings.startDate}
             editing={editing}
