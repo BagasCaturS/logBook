@@ -1330,6 +1330,16 @@ main,
   }
 }
 
+.app-footer {
+  margin-top: auto;
+  padding-top: 6px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  animation: riseIn 260ms ease-out both;
+}
+
 /* ---------- Responsive ---------- */
 
 @media (max-width: 640px) {

@@ -375,6 +375,8 @@ export default function App() {
           </div>
         </div>
       )}
+
+      <footer className="app-footer">Online Logbook v{appVersion}</footer>
     </div>
   );
 }
