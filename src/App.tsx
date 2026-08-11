@@ -19,6 +19,7 @@ import {
 import { formatDateTime } from "./lib/dates";
 import { t } from "./lib/i18n";
 import { getClient, getCurrentSession, onAuthChange, signIn, signOut, signUp } from "./lib/supabase";
+import { deletePhotos, uploadPhoto, type PhotoOps } from "./lib/photos";
 import { loadSettings, saveSettings } from "./lib/settings";
 import { syncNow } from "./lib/sync";
 import { DEFAULT_THEME } from "./lib/themes";
@@ -65,6 +66,7 @@ export default function App() {
     downloaded: 0,
     total: null,
   });
+  const [previewPhoto, setPreviewPhoto] = useState<string | null>(null);
 
   const settingsRef = useRef(settings);
   settingsRef.current = settings;
@@ -174,12 +176,29 @@ export default function App() {
     return null;
   }
 
-  async function handleSaveEntry(input: EntryInput, id: string | null) {
+  async function handleSaveEntry(input: EntryInput, id: string | null, photoOps: PhotoOps) {
     if (!session) return;
+    const s = settingsRef.current;
+    const client = getClient(s);
+    const removed = photoOps?.removed ?? [];
+    const added = photoOps?.added ?? [];
+    if (removed.length > 0 && client) {
+      await deletePhotos(client, removed);
+    }
+    const newPaths: string[] = [];
+    if (added.length > 0) {
+      if (!client) throw new Error("Supabase belum dikonfigurasi");
+      for (const f of added) {
+        newPaths.push(await uploadPhoto(client, session.userId, f));
+      }
+    }
+    const base = id ? (editing?.photo_paths ?? []) : [];
+    const photoPaths = [...base.filter((p) => !removed.includes(p)), ...newPaths];
+    const fullInput: EntryInput = { ...input, photo_paths: photoPaths };
     if (id) {
-      await updateEntry(id, session.userId, input);
+      await updateEntry(id, session.userId, fullInput);
     } else {
-      await addEntry(session.userId, input);
+      await addEntry(session.userId, fullInput);
     }
     await refreshEntries(session.userId);
     setEditing(null);
@@ -214,6 +233,11 @@ export default function App() {
     setDialogLeaving(false);
     setLeavingId(id);
     await delay(260);
+    const paths = confirmDelete.photo_paths ?? [];
+    const client = getClient(settingsRef.current);
+    if (client && paths.length > 0) {
+      await deletePhotos(client, paths);
+    }
     await deleteEntry(id, session.userId);
     await refreshEntries(session.userId);
     setLeavingId(null);
@@ -351,12 +375,19 @@ export default function App() {
           syncError={syncStatus.error}
           appVersion={appVersion}
           categories={categories}
+          entries={entries}
+          userId={session.userId}
           updateInfo={updateInfo}
           updateState={updateState}
           updateError={updateError}
           downloadProgress={downloadProgress}
           onCheckUpdate={() => void handleCheckUpdate()}
           onInstallUpdate={() => void handleInstallUpdate()}
+          onRestored={() => {
+            void refreshEntries(session.userId);
+            void refreshCategories(session.userId);
+            queueSync();
+          }}
           onSaveStartDate={(d) => {
             const next = { ...settingsRef.current, startDate: d };
             saveSettings(next);
@@ -402,6 +433,7 @@ export default function App() {
             editing={editing}
             initialDate={formDate}
             categories={categories}
+            supabaseUrl={settings.supabaseUrl}
             lang={lang}
             onSave={handleSaveEntry}
             onCreateCategory={handleCreateCategory}
@@ -416,6 +448,7 @@ export default function App() {
             categories={categories}
             startDate={settings.startDate}
             leavingId={leavingId}
+            supabaseUrl={settings.supabaseUrl}
             lang={lang}
             onAdd={(date) => {
               setEditing(null);
@@ -427,17 +460,20 @@ export default function App() {
               window.scrollTo({ top: 0, behavior: "smooth" });
             }}
             onDelete={(e) => setConfirmDelete(e)}
+            onOpenPhoto={(url) => setPreviewPhoto(url)}
           />
           <EntryList
             entries={entries}
             categories={categories}
             leavingId={leavingId}
+            supabaseUrl={settings.supabaseUrl}
             lang={lang}
             onEdit={(e) => {
               setEditing(e);
               window.scrollTo({ top: 0, behavior: "smooth" });
             }}
             onDelete={(e) => setConfirmDelete(e)}
+            onOpenPhoto={(url) => setPreviewPhoto(url)}
           />
         </main>
       )}
@@ -476,6 +512,17 @@ export default function App() {
                 {t(lang, "dialog.cancel")}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {previewPhoto && (
+        <div className="overlay" onClick={() => setPreviewPhoto(null)}>
+          <div className="photo-modal" onClick={(e) => e.stopPropagation()}>
+            <img src={previewPhoto} alt="" />
+            <button className="secondary" onClick={() => setPreviewPhoto(null)}>
+              {t(lang, "photo.close")}
+            </button>
           </div>
         </div>
       )}

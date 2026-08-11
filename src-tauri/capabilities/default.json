@@ -11,6 +11,10 @@
     "sql:allow-execute",
     "sql:allow-close",
     "updater:default",
-    "window-state:default"
+    "window-state:default",
+    "dialog:default",
+    "fs:allow-write-file",
+    "fs:allow-write-text-file",
+    "fs:allow-read-text-file"
   ]
 }

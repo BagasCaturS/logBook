@@ -158,6 +158,68 @@ const dict: Record<string, { id: string; en: string }> = {
     en: "Remove this category from all entries?",
   },
 
+  // export PDF
+  "export.title": { id: "Ekspor PDF", en: "Export PDF" },
+  "export.hint": {
+    id: "Simpan laporan kegiatan sebagai PDF.",
+    en: "Save your activity report as a PDF.",
+  },
+  "export.rangeLabel": { id: "Rentang", en: "Range" },
+  "export.rangeAll": { id: "Semua entri", en: "All entries" },
+  "export.rangeWeekOption": { id: "Minggu ke-{minggu}", en: "Week {minggu}" },
+  "export.button": { id: "Ekspor PDF", en: "Export PDF" },
+  "export.exporting": { id: "Membuat PDF...", en: "Generating PDF..." },
+  "export.done": { id: "PDF tersimpan.", en: "PDF saved." },
+  "export.error": { id: "Gagal mengekspor PDF: {error}", en: "Failed to export PDF: {error}" },
+  "export.empty": { id: "Tidak ada entri pada rentang ini.", en: "No entries in this range." },
+  "pdf.title": { id: "Laporan Kegiatan Magang", en: "Internship Activity Report" },
+  "pdf.rangeAll": { id: "Semua entri", en: "All entries" },
+  "pdf.rangeWeek": { id: "Minggu ke-{minggu}", en: "Week {minggu}" },
+  "pdf.exportedAt": { id: "Dibuat", en: "Exported" },
+  "pdf.count": { id: "{n} entri", en: "{n} entries" },
+  "pdf.colTanggal": { id: "Tanggal", en: "Date" },
+  "pdf.colMinggu": { id: "Minggu", en: "Week" },
+  "pdf.colHari": { id: "Hari ke-", en: "Day" },
+  "pdf.colKegiatan": { id: "Kegiatan", en: "Activity" },
+  "pdf.colKategori": { id: "Kategori", en: "Categories" },
+
+  // backup
+  "backup.title": { id: "Cadangan (Backup)", en: "Backup" },
+  "backup.hint": {
+    id: "Simpan seluruh data ke file JSON, atau pulihkan dari cadangan. Pemulihan menggabungkan data (versi terbaru menang).",
+    en: "Save all data to a JSON file, or restore from a backup. Restoring merges data (newest version wins).",
+  },
+  "backup.save": { id: "Simpan Cadangan", en: "Save Backup" },
+  "backup.restore": { id: "Pulihkan dari File", en: "Restore from File" },
+  "backup.saved": { id: "Cadangan tersimpan.", en: "Backup saved." },
+  "backup.saving": { id: "Menyimpan...", en: "Saving..." },
+  "backup.restoring": { id: "Memulihkan...", en: "Restoring..." },
+  "backup.restored": {
+    id: "Cadangan dipulihkan: {entries} entri, {categories} kategori.",
+    en: "Backup restored: {entries} entries, {categories} categories.",
+  },
+  "backup.error": { id: "Gagal: {error}", en: "Failed: {error}" },
+  "backup.invalid": {
+    id: "File bukan cadangan Online Logbook yang valid.",
+    en: "File is not a valid Online Logbook backup.",
+  },
+  "backup.confirmTitle": { id: "Pulihkan cadangan?", en: "Restore backup?" },
+  "backup.confirm": { id: "Pulihkan", en: "Restore" },
+  "backup.confirmText": {
+    id: "Data lokal akan digabung dengan isi cadangan (versi yang lebih baru menang). Lanjutkan?",
+    en: "Local data will be merged with the backup content (newest version wins). Continue?",
+  },
+
+  // photos
+  "photo.label": { id: "Foto (maks {n})", en: "Photos (max {n})" },
+  "photo.add": { id: "Pilih Foto", en: "Choose Photos" },
+  "photo.uploading": { id: "Mengunggah foto...", en: "Uploading photos..." },
+  "photo.bigFile": { id: "File besar dikompres otomatis.", en: "Large files are compressed automatically." },
+  "photo.maxReached": { id: "Maksimal {n} foto per entri.", en: "Maximum {n} photos per entry." },
+  "photo.uploadError": { id: "Gagal mengunggah foto: {error}", en: "Failed to upload photo: {error}" },
+  "photo.remove": { id: "Hapus", en: "Remove" },
+  "photo.close": { id: "Tutup", en: "Close" },
+
   // login
   "login.title": { id: "Login", en: "Login" },
   "login.signupTitle": { id: "Daftar Akun", en: "Sign Up" },

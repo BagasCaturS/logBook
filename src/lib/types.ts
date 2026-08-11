@@ -8,6 +8,7 @@ export interface LogbookEntry {
   minggu: number;
   hari_ke: number | null;
   category_ids: string[];
+  photo_paths: string[];
   created_at: string; // ISO UTC
   updated_at: string; // ISO UTC
   deleted: boolean;
@@ -20,6 +21,7 @@ export interface EntryInput {
   minggu: number;
   hari_ke: number | null;
   category_ids: string[];
+  photo_paths: string[];
 }
 
 export interface Category {
@@ -58,6 +60,7 @@ export interface RemoteEntry {
   minggu: number;
   hari_ke: number | null;
   category_ids?: string | string[] | null;
+  photo_paths?: string | string[] | null;
   created_at: string;
   updated_at: string;
   deleted: boolean;

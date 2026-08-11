@@ -3,19 +3,22 @@ import type { Category, LogbookEntry } from "../lib/types";
 import { formatTanggal } from "../lib/dates";
 import { t, type Lang } from "../lib/i18n";
 import { IconPencil, IconSearch, IconTrash } from "./icons";
+import PhotoThumbs from "./PhotoThumbs";
 
 interface Props {
   entries: LogbookEntry[];
   categories: Category[];
   leavingId?: string | null;
+  supabaseUrl: string;
   lang: Lang;
   onEdit: (e: LogbookEntry) => void;
   onDelete: (e: LogbookEntry) => void;
+  onOpenPhoto: (url: string) => void;
 }
 
 const PAGE_SIZE = 20;
 
-export default function EntryList({ entries, categories, leavingId, lang, onEdit, onDelete }: Props) {
+export default function EntryList({ entries, categories, leavingId, supabaseUrl, lang, onEdit, onDelete, onOpenPhoto }: Props) {
   const [filter, setFilter] = useState("");
   const [mingguFilter, setMingguFilter] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
@@ -115,6 +118,7 @@ export default function EntryList({ entries, categories, leavingId, lang, onEdit
                         })}
                       </div>
                     )}
+                    <PhotoThumbs paths={e.photo_paths ?? []} supabaseUrl={supabaseUrl} onOpen={onOpenPhoto} />
                   </div>
                 </div>
               </li>

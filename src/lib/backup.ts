@@ -1,0 +1,78 @@
+import { open, save, type DialogFilter } from "@tauri-apps/plugin-dialog";
+import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
+import type { BackupData } from "./db";
+import type { Category, LogbookEntry } from "./types";
+
+const jsonFilter: DialogFilter = { name: "JSON", extensions: ["json"] };
+
+export function buildBackupJson(
+  entries: LogbookEntry[],
+  categories: Category[],
+  appVersion: string
+): string {
+  const data: BackupData = {
+    appVersion,
+    exportedAt: new Date().toISOString(),
+    entries,
+    categories,
+  };
+  return JSON.stringify(data, null, 2);
+}
+
+export async function saveBackupFile(json: string, suggestedName: string): Promise<string | null> {
+  const path = await save({ defaultPath: suggestedName, filters: [jsonFilter] });
+  if (!path) return null;
+  await writeTextFile(path, json);
+  return path;
+}
+
+export interface PickResult {
+  cancelled: boolean;
+  data: BackupData | null;
+}
+
+export async function pickBackupFile(): Promise<PickResult> {
+  const path = await open({
+    multiple: false,
+    directory: false,
+    filters: [jsonFilter],
+  });
+  if (typeof path !== "string" || !path) return { cancelled: true, data: null };
+  let parsed: unknown;
+  try {
+    const raw = await readTextFile(path);
+    parsed = JSON.parse(raw);
+  } catch {
+    return { cancelled: false, data: null };
+  }
+  return { cancelled: false, data: validateBackup(parsed) };
+}
+
+function validateBackup(v: unknown): BackupData | null {
+  if (typeof v !== "object" || v === null) return null;
+  const obj = v as Record<string, unknown>;
+  if (!Array.isArray(obj.entries)) return null;
+  if (!Array.isArray(obj.categories)) return null;
+  return {
+    appVersion: typeof obj.appVersion === "string" ? obj.appVersion : undefined,
+    exportedAt: typeof obj.exportedAt === "string" ? obj.exportedAt : undefined,
+    entries: obj.entries.filter(isEntry),
+    categories: obj.categories.filter(isCategory),
+  };
+}
+
+function isEntry(v: unknown): v is LogbookEntry {
+  if (typeof v !== "object" || v === null) return false;
+  const e = v as Record<string, unknown>;
+  return (
+    typeof e.id === "string" &&
+    typeof e.kegiatan === "string" &&
+    typeof e.tanggal === "string"
+  );
+}
+
+function isCategory(v: unknown): v is Category {
+  if (typeof v !== "object" || v === null) return false;
+  const c = v as Record<string, unknown>;
+  return typeof c.id === "string" && typeof c.name === "string";
+}

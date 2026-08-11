@@ -4,11 +4,13 @@ import {
   getDirtyCategories,
   getDirtyEntries,
   getEntry,
+  listEntries,
   markCategoryClean,
   markClean,
   upsertCategoryLocal,
   upsertLocal,
 } from "./db";
+import { cleanupOrphanPhotos, deletePhotos } from "./photos";
 import { saveSettings } from "./settings";
 import type {
   AppSettings,
@@ -46,6 +48,7 @@ function toLocal(r: RemoteEntry, userId: string): LogbookEntry {
     minggu: r.minggu,
     hari_ke: r.hari_ke ?? null,
     category_ids: parseIds(r.category_ids),
+    photo_paths: parseIds(r.photo_paths),
     created_at: r.created_at,
     updated_at: r.updated_at,
     deleted: !!r.deleted,
@@ -76,6 +79,8 @@ interface TableAdapter<TLocal> {
   fromRemote: (r: Record<string, unknown>, userId: string) => TLocal;
   touchedAt: (row: TLocal) => string;
   idOf: (row: TLocal) => string;
+  /** dipanggil sebelum baris lokal dihapus karena remote berstatus deleted (soft delete) */
+  onRemoteDelete?: (row: TLocal, client: SupabaseClient) => Promise<void>;
 }
 
 /**
@@ -155,6 +160,9 @@ async function syncTable<TLocal>(
     const id = String(r.id);
     const local = await adapter.getLocal(id, userId);
     if (local && ts(adapter.touchedAt(local)) >= updated) continue;
+    if (r.deleted && local && adapter.onRemoteDelete) {
+      await adapter.onRemoteDelete(local, client);
+    }
     await adapter.upsertLocal(adapter.fromRemote(r, userId));
   }
   return maxRemoteTs;
@@ -173,6 +181,7 @@ const entryAdapter: TableAdapter<LogbookEntry> = {
     minggu: e.minggu,
     hari_ke: e.hari_ke,
     category_ids: JSON.stringify(e.category_ids ?? []),
+    photo_paths: JSON.stringify(e.photo_paths ?? []),
     created_at: e.created_at,
     updated_at: e.updated_at,
     // 1/0 works for both BOOLEAN and INTEGER columns in PostgreSQL
@@ -181,6 +190,10 @@ const entryAdapter: TableAdapter<LogbookEntry> = {
   fromRemote: (r, userId) => toLocal(r as unknown as RemoteEntry, userId),
   touchedAt: (e) => e.updated_at,
   idOf: (e) => e.id,
+  onRemoteDelete: async (e, client) => {
+    const paths = e.photo_paths ?? [];
+    if (paths.length > 0) await deletePhotos(client, paths);
+  },
 };
 
 const categoryAdapter: TableAdapter<Category> = {
@@ -242,6 +255,16 @@ export async function syncNow(
     const newWatermark = maxRemoteTs > 0 ? new Date(maxRemoteTs).toISOString() : settings.lastSyncAt;
     const nextSettings: AppSettings = { ...settings, lastSyncAt: newWatermark };
     saveSettings(nextSettings);
+
+    // Bersihkan foto yatim di bucket: hapus file yang tidak dirujuk entri hidup.
+    // Kegagalan di sini tidak menggagalkan sinkronisasi.
+    try {
+      const live = await listEntries(userId);
+      const referenced = new Set(live.flatMap((e) => e.photo_paths ?? []));
+      await cleanupOrphanPhotos(client, userId, referenced);
+    } catch {
+      // abaikan
+    }
 
     const status: SyncStatus = {
       state: "online",

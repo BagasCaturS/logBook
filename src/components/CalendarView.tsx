@@ -10,16 +10,19 @@ import {
 } from "../lib/dates";
 import { t, type Lang } from "../lib/i18n";
 import { IconChevronLeft, IconChevronRight, IconPencil, IconPlus, IconTrash } from "./icons";
+import PhotoThumbs from "./PhotoThumbs";
 
 interface Props {
   entries: LogbookEntry[];
   categories: Category[];
   startDate: string;
   leavingId?: string | null;
+  supabaseUrl: string;
   lang: Lang;
   onAdd: (date: string) => void;
   onEdit: (e: LogbookEntry) => void;
   onDelete: (e: LogbookEntry) => void;
+  onOpenPhoto: (url: string) => void;
 }
 
 export default function CalendarView({
@@ -27,10 +30,12 @@ export default function CalendarView({
   categories,
   startDate,
   leavingId,
+  supabaseUrl,
   lang,
   onAdd,
   onEdit,
   onDelete,
+  onOpenPhoto,
 }: Props) {
   const now = todayIso();
   const [cursor, setCursor] = useState(() => {
@@ -191,6 +196,7 @@ export default function CalendarView({
                         })}
                       </div>
                     )}
+                    <PhotoThumbs paths={e.photo_paths ?? []} supabaseUrl={supabaseUrl} onOpen={onOpenPhoto} />
                   </div>
                 </div>
               </li>
