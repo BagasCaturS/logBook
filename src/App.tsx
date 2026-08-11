@@ -399,7 +399,7 @@ export default function App() {
         </div>
       )}
 
-      <footer className="app-footer">Online Logbook v{appVersion}</footer>
+      <footer className="app-footer">Online Logbook v{appVersion} · Dibuat oleh Sapporo</footer>
     </div>
   );
 }

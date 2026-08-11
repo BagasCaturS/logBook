@@ -677,6 +677,14 @@ button.danger-btn:hover {
   line-height: 1.55;
 }
 
+.login-credit {
+  text-align: center;
+  font-size: 12px !important;
+  font-weight: 600;
+  padding-top: 6px;
+  border-top: 1px dashed var(--border);
+}
+
 label {
   display: flex;
   flex-direction: column;
@@ -880,12 +888,14 @@ hr {
   list-style: none;
   margin: 0;
   padding: 0;
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
   gap: 10px;
+  align-items: stretch;
 }
 
 .list li {
+  display: flex;
   transition: opacity 200ms ease, margin-bottom 240ms ease;
 }
 
@@ -893,6 +903,8 @@ hr {
   display: grid;
   grid-template-rows: 1fr;
   transition: grid-template-rows 240ms ease;
+  flex: 1;
+  width: 100%;
 }
 
 .entry-collapse > * {
@@ -904,8 +916,9 @@ hr {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
-  padding: 14px 16px;
+  padding: 10px 12px;
   box-shadow: var(--shadow-sm);
+  height: 100%;
   transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease,
     background-color 250ms ease;
 }
@@ -934,16 +947,17 @@ li.removing .entry-card {
 .entry-head {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 8px;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 6px;
 }
 
 .badge {
   background: color-mix(in srgb, var(--primary) 12%, transparent);
   color: var(--primary);
   font-weight: 700;
-  font-size: 12px;
-  padding: 3px 10px;
+  font-size: 11.5px;
+  padding: 3px 9px;
   border-radius: 999px;
   white-space: nowrap;
 }
@@ -955,7 +969,7 @@ li.removing .entry-card {
 
 .date {
   color: var(--muted);
-  font-size: 12.5px;
+  font-size: 12px;
   font-weight: 600;
 }
 
@@ -965,8 +979,34 @@ li.removing .entry-card {
 
 .kegiatan {
   white-space: pre-wrap;
-  line-height: 1.6;
+  line-height: 1.55;
   font-weight: 500;
+  font-size: 13.5px;
+}
+
+.list-more {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding-top: 14px;
+  border-top: 1px dashed var(--border);
+  animation: riseIn 240ms ease-out both;
+}
+
+.list-more p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.list-more-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  justify-content: center;
 }
 
 /* ---------- Calendar ---------- */
@@ -1529,6 +1569,15 @@ main,
 
   .cal-cell {
     min-height: 44px;
+  }
+
+  .list {
+    grid-template-columns: 1fr;
+  }
+
+  .list-more-actions {
+    flex-direction: column;
+    gap: 10px;
   }
 }
 

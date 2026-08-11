@@ -64,6 +64,7 @@ export default function Login({ onLogin }: Props) {
       <button className="link" onClick={() => setMode(mode === "login" ? "signup" : "login")}>
         {mode === "login" ? "Belum punya akun? Daftar" : "Sudah punya akun? Login"}
       </button>
+      <p className="login-credit">Dibuat oleh Sapporo</p>
     </div>
   );
 }

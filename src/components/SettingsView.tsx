@@ -200,6 +200,11 @@ export default function SettingsView({
           <button onClick={onInstallUpdate}>Unduh & Pasang</button>
         )}
       </div>
+      <hr />
+      <h3>Tentang</h3>
+      <p className="settings-meta">
+        <strong>Dibuat oleh</strong> Sapporo · © 2026 — Online Logbook v{appVersion || "-"}
+      </p>
     </div>
   );
 }
