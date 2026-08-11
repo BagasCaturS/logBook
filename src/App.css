@@ -630,6 +630,9 @@ button.danger-btn:hover {
 .m-t {
   margin-top: 10px;
 }
+.m-b{
+  margin-bottom: 10px;
+}
 .card,
 .form,
 .setup {

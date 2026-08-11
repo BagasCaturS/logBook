@@ -25,10 +25,12 @@ export default function EntryForm({ startDate, editing, initialDate, onSave, onC
       setMinggu(String(editing.minggu));
     } else {
       setKegiatan("");
-      setTanggal(initialDate ?? todayIso());
-      setMinggu("");
+      const t = initialDate ?? todayIso();
+      setTanggal(t);
+      const a = computeMinggu(t, startDate);
+      setMinggu(a.minggu !== null ? String(a.minggu) : "");
     }
-  }, [editing, initialDate]);
+  }, [editing, initialDate, startDate]);
 
   useEffect(() => {
     if (savedPhase === "show") {
@@ -44,8 +46,10 @@ export default function EntryForm({ startDate, editing, initialDate, onSave, onC
 
   const auto = useMemo(() => computeMinggu(tanggal, startDate), [tanggal, startDate]);
 
-  function syncFromAuto() {
-    if (auto.minggu !== null) setMinggu(String(auto.minggu));
+  function handleTanggalChange(v: string) {
+    setTanggal(v);
+    const a = computeMinggu(v, startDate);
+    if (a.minggu !== null) setMinggu(String(a.minggu));
   }
 
   async function submit() {
@@ -95,7 +99,11 @@ export default function EntryForm({ startDate, editing, initialDate, onSave, onC
       <div className="row">
         <label>
           Tanggal
-          <input type="date" value={tanggal} onChange={(e) => setTanggal(e.target.value)} />
+          <input
+            type="date"
+            value={tanggal}
+            onChange={(e) => handleTanggalChange(e.target.value)}
+          />
         </label>
         <label>
           Minggu ke-?
@@ -109,10 +117,7 @@ export default function EntryForm({ startDate, editing, initialDate, onSave, onC
       </div>
       {startDate && auto.minggu !== null ? (
         <p className="hint">
-          Auto: Minggu {auto.minggu} · Hari ke-{auto.hariKe}{" "}
-          <button className="link" onClick={syncFromAuto} disabled={String(auto.minggu) === minggu}>
-            (gunakan ini)
-          </button>
+          Auto: Minggu {auto.minggu} · Hari ke-{auto.hariKe}
         </p>
       ) : startDate ? (
         <p className="hint">Tanggal ini sebelum tanggal mulai magang — isi minggu manual.</p>

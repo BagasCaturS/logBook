@@ -326,7 +326,7 @@ export default function App() {
       ) : (
         <main>
           {updateInfo && updateState !== "downloading" && (
-            <div className="update-banner" role="status">
+            <div className="update-banner m-b" role="status">
               <div className="update-banner-text">
                 <strong>Update v{updateInfo.version} tersedia</strong>
                 <span>
