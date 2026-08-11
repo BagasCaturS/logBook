@@ -31,6 +31,51 @@ export function formatTanggal(s: string): string {
   return `${Number(d)} ${month} ${y}`;
 }
 
+export const MONTH_NAMES_FULL = [
+  "Januari",
+  "Februari",
+  "Maret",
+  "April",
+  "Mei",
+  "Juni",
+  "Juli",
+  "Agustus",
+  "September",
+  "Oktober",
+  "November",
+  "Desember",
+];
+
+export function formatMonthYear(s: string): string {
+  const [y, m] = s.slice(0, 10).split("-");
+  const month = MONTH_NAMES_FULL[Number(m) - 1] ?? m;
+  return `${month} ${y}`;
+}
+
+export interface MonthCell {
+  date: string; // YYYY-MM-DD
+  inMonth: boolean;
+}
+
+/**
+ * Grid kalender 6 baris x 7 kolom yang dimulai hari Senin.
+ * month adalah 0-based (0 = Januari).
+ */
+export function getMonthGrid(year: number, month: number): MonthCell[] {
+  const first = new Date(year, month, 1);
+  const offset = (first.getDay() + 6) % 7; // Senin = 0
+  const start = new Date(year, month, 1 - offset);
+  const cells: MonthCell[] = [];
+  for (let i = 0; i < 42; i++) {
+    const d = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i);
+    const date = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
+      d.getDate()
+    ).padStart(2, "0")}`;
+    cells.push({ date, inMonth: d.getMonth() === month });
+  }
+  return cells;
+}
+
 export function formatDateTime(s: string | null): string {
   if (!s) return "-";
   const d = new Date(s);

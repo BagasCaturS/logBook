@@ -85,6 +85,22 @@ export function IconSearch({ size = 16, className }: IconProps) {
   );
 }
 
+export function IconChevronLeft({ size = 16, className }: IconProps) {
+  return (
+    <svg {...base(size, className)}>
+      <path d="m15 18-6-6 6-6" />
+    </svg>
+  );
+}
+
+export function IconChevronRight({ size = 16, className }: IconProps) {
+  return (
+    <svg {...base(size, className)}>
+      <path d="m9 18 6-6-6-6" />
+    </svg>
+  );
+}
+
 export function IconLogout({ size = 16, className }: IconProps) {
   return (
     <svg {...base(size, className)}>

@@ -5,6 +5,7 @@ import EntryList from "./components/EntryList";
 import Login from "./components/Login";
 import SettingsView from "./components/SettingsView";
 import Setup from "./components/Setup";
+import CalendarView from "./components/CalendarView";
 import { IconBook, IconGear, IconRefresh } from "./components/icons";
 import { addEntry, deleteEntry, listEntries, updateEntry } from "./lib/db";
 import { formatDateTime } from "./lib/dates";
@@ -40,6 +41,7 @@ export default function App() {
   });
   const [view, setView] = useState<"main" | "settings">("main");
   const [editing, setEditing] = useState<LogbookEntry | null>(null);
+  const [formDate, setFormDate] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<LogbookEntry | null>(null);
   const [leavingId, setLeavingId] = useState<string | null>(null);
   const [dialogLeaving, setDialogLeaving] = useState(false);
@@ -164,6 +166,7 @@ export default function App() {
     }
     await refreshEntries(session.userId);
     setEditing(null);
+    setFormDate(null);
     queueSync();
   }
 
@@ -344,8 +347,28 @@ export default function App() {
           <EntryForm
             startDate={settings.startDate}
             editing={editing}
+            initialDate={formDate}
             onSave={handleSaveEntry}
-            onCancel={() => setEditing(null)}
+            onCancel={() => {
+              setEditing(null);
+              setFormDate(null);
+            }}
+          />
+          
+          <CalendarView
+            entries={entries}
+            startDate={settings.startDate}
+            leavingId={leavingId}
+            onAdd={(date) => {
+              setEditing(null);
+              setFormDate(date);
+              window.scrollTo({ top: 0, behavior: "smooth" });
+            }}
+            onEdit={(e) => {
+              setEditing(e);
+              window.scrollTo({ top: 0, behavior: "smooth" });
+            }}
+            onDelete={(e) => setConfirmDelete(e)}
           />
           <EntryList
             entries={entries}

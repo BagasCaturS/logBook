@@ -1,5 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { computeMinggu, daysBetween, formatTanggal, formatDateTime } from "./dates";
+import {
+  computeMinggu,
+  daysBetween,
+  formatTanggal,
+  formatDateTime,
+  formatMonthYear,
+  getMonthGrid,
+} from "./dates";
 
 describe("computeMinggu", () => {
   it("hari pertama magang = Minggu 1, Hari ke-1", () => {
@@ -76,5 +83,49 @@ describe("formatDateTime", () => {
 
   it("string tanggal tidak valid ditampilkan sebagai dash", () => {
     expect(formatDateTime("bukan-tanggal")).toBe("-");
+  });
+});
+
+describe("formatMonthYear", () => {
+  it("format bulan penuh bahasa Indonesia", () => {
+    expect(formatMonthYear("2026-08-11")).toBe("Agustus 2026");
+  });
+
+  it("bulan Januari dan Desember", () => {
+    expect(formatMonthYear("2026-01-05")).toBe("Januari 2026");
+    expect(formatMonthYear("2026-12-31")).toBe("Desember 2026");
+  });
+});
+
+describe("getMonthGrid", () => {
+  it("selalu 42 sel (6 baris x 7 kolom)", () => {
+    expect(getMonthGrid(2026, 7).length).toBe(42);
+  });
+
+  it("Agustus 2026 (Sabtu) dimulai Senin 27 Juli, ada 31 sel dalam bulan", () => {
+    const grid = getMonthGrid(2026, 7);
+    expect(grid[0]).toEqual({ date: "2026-07-27", inMonth: false });
+    expect(grid[5]).toEqual({ date: "2026-08-01", inMonth: true });
+    expect(grid[41]).toEqual({ date: "2026-09-06", inMonth: false });
+    expect(grid.filter((c) => c.inMonth).length).toBe(31);
+  });
+
+  it("Januari 2026 (Kamis) dimulai Senin 29 Des 2025", () => {
+    const grid = getMonthGrid(2026, 0);
+    expect(grid[0]).toEqual({ date: "2025-12-29", inMonth: false });
+    expect(grid[3]).toEqual({ date: "2026-01-01", inMonth: true });
+    expect(grid.filter((c) => c.inMonth).length).toBe(31);
+  });
+
+  it("bulan yang dimulai hari Senin (Juni 2026) tanpa sel pendahulu", () => {
+    const grid = getMonthGrid(2026, 5);
+    expect(grid[0]).toEqual({ date: "2026-06-01", inMonth: true });
+    expect(grid.filter((c) => c.inMonth).length).toBe(30);
+  });
+
+  it("lintas tahun: Des 2026 dimulai Senin 30 Nov 2026", () => {
+    const grid = getMonthGrid(2026, 11);
+    expect(grid[0]).toEqual({ date: "2026-11-30", inMonth: false });
+    expect(grid[1]).toEqual({ date: "2026-12-01", inMonth: true });
   });
 });

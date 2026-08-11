@@ -5,11 +5,12 @@ import { computeMinggu, todayIso } from "../lib/dates";
 interface Props {
   startDate: string;
   editing: LogbookEntry | null;
+  initialDate?: string | null;
   onSave: (input: EntryInput, id: string | null) => Promise<void>;
   onCancel: () => void;
 }
 
-export default function EntryForm({ startDate, editing, onSave, onCancel }: Props) {
+export default function EntryForm({ startDate, editing, initialDate, onSave, onCancel }: Props) {
   const [kegiatan, setKegiatan] = useState("");
   const [tanggal, setTanggal] = useState(todayIso());
   const [minggu, setMinggu] = useState("");
@@ -24,10 +25,10 @@ export default function EntryForm({ startDate, editing, onSave, onCancel }: Prop
       setMinggu(String(editing.minggu));
     } else {
       setKegiatan("");
-      setTanggal(todayIso());
+      setTanggal(initialDate ?? todayIso());
       setMinggu("");
     }
-  }, [editing]);
+  }, [editing, initialDate]);
 
   useEffect(() => {
     if (savedPhase === "show") {
