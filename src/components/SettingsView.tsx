@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { formatDateTime } from "../lib/dates";
 import { THEMES } from "../lib/themes";
 import { IconLogout } from "./icons";
@@ -30,6 +30,19 @@ export default function SettingsView({
 }: Props) {
   const [draft, setDraft] = useState(startDate);
   const dirty = draft !== startDate;
+  const [savedPhase, setSavedPhase] = useState<"show" | "leave" | null>(null);
+
+  useEffect(() => {
+    if (savedPhase === "show") {
+      const t = window.setTimeout(() => setSavedPhase("leave"), 1600);
+      return () => window.clearTimeout(t);
+    }
+    if (savedPhase === "leave") {
+      const t = window.setTimeout(() => setSavedPhase(null), 260);
+      return () => window.clearTimeout(t);
+    }
+    return undefined;
+  }, [savedPhase]);
 
   return (
     <div className="form">
@@ -67,13 +80,27 @@ export default function SettingsView({
         </p>
       )}
       <div className="row actions">
-        <button disabled={!dirty} onClick={() => onSaveStartDate(draft)}>
+        <button
+          disabled={!dirty}
+          onClick={() => {
+            onSaveStartDate(draft);
+            setSavedPhase("show");
+          }}
+        >
           Simpan
         </button>
         <button className="secondary" onClick={onBack}>
           Kembali
         </button>
       </div>
+      {savedPhase && (
+        <p
+          className={`info saved-toast${savedPhase === "leave" ? " leaving" : ""}`}
+          role="status"
+        >
+          Tersimpan
+        </p>
+      )}
       <hr />
       <div className="settings-meta">
         <p>

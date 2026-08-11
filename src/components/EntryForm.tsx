@@ -15,6 +15,7 @@ export default function EntryForm({ startDate, editing, onSave, onCancel }: Prop
   const [minggu, setMinggu] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [savedPhase, setSavedPhase] = useState<"show" | "leave" | null>(null);
 
   useEffect(() => {
     if (editing) {
@@ -27,6 +28,18 @@ export default function EntryForm({ startDate, editing, onSave, onCancel }: Prop
       setMinggu("");
     }
   }, [editing]);
+
+  useEffect(() => {
+    if (savedPhase === "show") {
+      const t = window.setTimeout(() => setSavedPhase("leave"), 1600);
+      return () => window.clearTimeout(t);
+    }
+    if (savedPhase === "leave") {
+      const t = window.setTimeout(() => setSavedPhase(null), 260);
+      return () => window.clearTimeout(t);
+    }
+    return undefined;
+  }, [savedPhase]);
 
   const auto = useMemo(() => computeMinggu(tanggal, startDate), [tanggal, startDate]);
 
@@ -60,13 +73,14 @@ export default function EntryForm({ startDate, editing, onSave, onCancel }: Prop
         },
         editing?.id ?? null
       );
+      setSavedPhase("show");
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <div className="form">
+    <div className={`form${editing ? " editing" : ""}`}>
       <h3>{editing ? "Edit Kegiatan" : "Tambah Kegiatan"}</h3>
       <label>
         Kegiatan
@@ -117,6 +131,14 @@ export default function EntryForm({ startDate, editing, onSave, onCancel }: Prop
           Batal
         </button>
       </div>
+      {savedPhase && (
+        <p
+          className={`info saved-toast${savedPhase === "leave" ? " leaving" : ""}`}
+          role="status"
+        >
+          Tersimpan
+        </p>
+      )}
     </div>
   );
 }

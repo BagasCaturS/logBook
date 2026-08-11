@@ -5,11 +5,12 @@ import { IconPencil, IconSearch, IconTrash } from "./icons";
 
 interface Props {
   entries: LogbookEntry[];
+  leavingId?: string | null;
   onEdit: (e: LogbookEntry) => void;
   onDelete: (e: LogbookEntry) => void;
 }
 
-export default function EntryList({ entries, onEdit, onDelete }: Props) {
+export default function EntryList({ entries, leavingId, onEdit, onDelete }: Props) {
   const [filter, setFilter] = useState("");
   const [mingguFilter, setMingguFilter] = useState("");
 
@@ -48,22 +49,26 @@ export default function EntryList({ entries, onEdit, onDelete }: Props) {
       ) : (
         <ul className="list">
           {filtered.map((e) => (
-            <li key={e.id}>
-              <div className="entry-head">
-                <span className="badge">Minggu {e.minggu}</span>
-                {e.hari_ke !== null && <span className="badge violet">Hari ke-{e.hari_ke}</span>}
-                <span className="date">{formatTanggal(e.tanggal)}</span>
-                <span className="spacer" />
-                <button className="link" onClick={() => onEdit(e)} aria-label={`Edit: ${e.kegiatan.slice(0, 40)}`}>
-                  <IconPencil size={13} />
-                  Edit
-                </button>
-                <button className="link danger" onClick={() => onDelete(e)} aria-label={`Hapus: ${e.kegiatan.slice(0, 40)}`}>
-                  <IconTrash size={13} />
-                  Hapus
-                </button>
+            <li key={e.id} className={leavingId === e.id ? "removing" : ""}>
+              <div className="entry-collapse">
+                <div className="entry-card">
+                  <div className="entry-head">
+                    <span className="badge">Minggu {e.minggu}</span>
+                    {e.hari_ke !== null && <span className="badge violet">Hari ke-{e.hari_ke}</span>}
+                    <span className="date">{formatTanggal(e.tanggal)}</span>
+                    <span className="spacer" />
+                    <button className="link" onClick={() => onEdit(e)} aria-label={`Edit: ${e.kegiatan.slice(0, 40)}`}>
+                      <IconPencil size={13} />
+                      Edit
+                    </button>
+                    <button className="link danger" onClick={() => onDelete(e)} aria-label={`Hapus: ${e.kegiatan.slice(0, 40)}`}>
+                      <IconTrash size={13} />
+                      Hapus
+                    </button>
+                  </div>
+                  <div className="kegiatan">{e.kegiatan}</div>
+                </div>
               </div>
-              <div className="kegiatan">{e.kegiatan}</div>
             </li>
           ))}
         </ul>

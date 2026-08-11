@@ -883,6 +883,21 @@ hr {
 }
 
 .list li {
+  transition: opacity 200ms ease, margin-bottom 240ms ease;
+}
+
+.entry-collapse {
+  display: grid;
+  grid-template-rows: 1fr;
+  transition: grid-template-rows 240ms ease;
+}
+
+.entry-collapse > * {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.entry-card {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
@@ -892,10 +907,25 @@ hr {
     background-color 250ms ease;
 }
 
-.list li:hover {
+.list li:hover .entry-card {
   transform: translateY(-1px);
   box-shadow: var(--shadow-md);
   border-color: color-mix(in srgb, var(--primary) 35%, var(--border));
+}
+
+li.removing {
+  opacity: 0;
+  margin-bottom: -10px;
+  pointer-events: none;
+}
+
+li.removing .entry-collapse {
+  grid-template-rows: 0fr;
+}
+
+li.removing .entry-card {
+  box-shadow: none;
+  border-color: transparent;
 }
 
 .entry-head {
@@ -994,6 +1024,188 @@ hr {
   to {
     opacity: 1;
     transform: scale(1) translateY(0);
+  }
+}
+
+.overlay.leaving {
+  animation: fadeOut 160ms ease forwards;
+}
+
+.dialog.leaving {
+  animation: popOut 160ms ease forwards;
+}
+
+@keyframes fadeOut {
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes popOut {
+  to {
+    opacity: 0;
+    transform: scale(0.94) translateY(6px);
+  }
+}
+
+/* ---------- Motion ---------- */
+
+main,
+.form,
+.setup {
+  animation: riseIn 260ms ease-out both;
+}
+
+.brand-mark {
+  animation: riseIn 320ms ease-out both;
+}
+
+.sync-info button.syncing svg {
+  animation: spin 900ms linear infinite;
+}
+
+.list li {
+  animation: listIn 280ms ease-out backwards;
+}
+
+.list li:nth-child(2) {
+  animation-delay: 40ms;
+}
+
+.list li:nth-child(3) {
+  animation-delay: 80ms;
+}
+
+.list li:nth-child(4) {
+  animation-delay: 120ms;
+}
+
+.list li:nth-child(5) {
+  animation-delay: 160ms;
+}
+
+.list li:nth-child(6) {
+  animation-delay: 200ms;
+}
+
+.list li:nth-child(7) {
+  animation-delay: 240ms;
+}
+
+.list li:nth-child(8) {
+  animation-delay: 280ms;
+}
+
+.empty {
+  animation: riseIn 240ms ease-out both;
+}
+
+.hint,
+.info {
+  animation: riseIn 220ms ease-out both;
+}
+
+.info.saved-toast.leaving {
+  animation: none;
+  opacity: 0;
+  transform: translateY(-4px);
+  transition: opacity 240ms ease, transform 240ms ease;
+}
+
+.form.editing {
+  border-color: color-mix(in srgb, var(--primary) 45%, var(--border));
+  animation: popIn 200ms ease;
+}
+
+.error {
+  animation: shake 300ms ease;
+}
+
+.theme-card {
+  animation: listIn 240ms ease-out backwards;
+}
+
+.theme-grid .theme-card:nth-child(2) {
+  animation-delay: 30ms;
+}
+
+.theme-grid .theme-card:nth-child(3) {
+  animation-delay: 60ms;
+}
+
+.theme-grid .theme-card:nth-child(4) {
+  animation-delay: 90ms;
+}
+
+.theme-grid .theme-card:nth-child(5) {
+  animation-delay: 120ms;
+}
+
+.theme-grid .theme-card:nth-child(6) {
+  animation-delay: 150ms;
+}
+
+.theme-grid .theme-card:nth-child(7) {
+  animation-delay: 180ms;
+}
+
+.theme-grid .theme-card:nth-child(8) {
+  animation-delay: 210ms;
+}
+
+.theme-grid .theme-card:nth-child(9) {
+  animation-delay: 240ms;
+}
+
+.theme-grid .theme-card:nth-child(10) {
+  animation-delay: 270ms;
+}
+
+.theme-card.active {
+  animation: popIn 180ms ease;
+}
+
+@keyframes riseIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes listIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-5px);
+  }
+  50% {
+    transform: translateX(4px);
+  }
+  75% {
+    transform: translateX(-3px);
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
   }
 }
 

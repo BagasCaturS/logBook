@@ -33,7 +33,7 @@ export default function Login({ onLogin }: Props) {
   }
 
   return (
-    <div className="setup">
+    <div className="setup" key={mode}>
       <h2>{mode === "login" ? "Login" : "Daftar Akun"}</h2>
       <label>
         Email

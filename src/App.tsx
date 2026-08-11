@@ -15,17 +15,22 @@ import type { AppSettings, EntryInput, LogbookEntry, SyncStatus } from "./lib/ty
 
 const SYNC_INTERVAL_MS = 30_000;
 
+const delay = (ms: number) => new Promise<void>((resolve) => window.setTimeout(resolve, ms));
+
 export default function App() {
-  const [settings, setSettings] = useState<AppSettings>(() => loadSettings());
+  const [initialSettings] = useState(() => loadSettings());
+  const [settings, setSettings] = useState<AppSettings>(initialSettings);
   const [session, setSession] = useState<{ userId: string; email: string | undefined } | null>(null);
   const [entries, setEntries] = useState<LogbookEntry[]>([]);
   const [syncStatus, setSyncStatus] = useState<SyncStatus>({
     state: "offline",
-    lastSyncAt: loadSettings().lastSyncAt,
+    lastSyncAt: initialSettings.lastSyncAt,
   });
   const [view, setView] = useState<"main" | "settings">("main");
   const [editing, setEditing] = useState<LogbookEntry | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<LogbookEntry | null>(null);
+  const [leavingId, setLeavingId] = useState<string | null>(null);
+  const [dialogLeaving, setDialogLeaving] = useState(false);
   const [initializing, setInitializing] = useState(true);
 
   const settingsRef = useRef(settings);
@@ -37,7 +42,7 @@ export default function App() {
     setEntries(await listEntries(userId));
   }, []);
 
-  const runSync = useCallback(async (opts?: { forceStatus?: boolean }) => {
+  const runSync = useCallback(async () => {
     if (syncInFlight.current) return;
     syncInFlight.current = true;
     try {
@@ -47,7 +52,6 @@ export default function App() {
     } finally {
       syncInFlight.current = false;
     }
-    void opts;
   }, [session]);
 
   const queueSync = useCallback(() => {
@@ -132,11 +136,27 @@ export default function App() {
     queueSync();
   }
 
+  function closeDialog() {
+    if (dialogLeaving) return;
+    setDialogLeaving(true);
+    window.setTimeout(() => {
+      setConfirmDelete(null);
+      setDialogLeaving(false);
+    }, 170);
+  }
+
   async function handleConfirmDelete() {
-    if (!session || !confirmDelete) return;
-    await deleteEntry(confirmDelete.id, session.userId);
-    await refreshEntries(session.userId);
+    if (!session || !confirmDelete || dialogLeaving) return;
+    const id = confirmDelete.id;
+    setDialogLeaving(true);
+    await delay(170);
     setConfirmDelete(null);
+    setDialogLeaving(false);
+    setLeavingId(id);
+    await delay(260);
+    await deleteEntry(id, session.userId);
+    await refreshEntries(session.userId);
+    setLeavingId(null);
     queueSync();
   }
 
@@ -197,7 +217,7 @@ export default function App() {
             </span>
           </span>
           <button
-            className="secondary"
+            className={`secondary${syncStatus.state === "syncing" ? " syncing" : ""}`}
             disabled={syncStatus.state === "syncing"}
             onClick={async () => {
               await runSync();
@@ -243,7 +263,6 @@ export default function App() {
       ) : (
         <main>
           <EntryForm
-            key={editing?.id ?? "new"}
             startDate={settings.startDate}
             editing={editing}
             onSave={handleSaveEntry}
@@ -251,6 +270,7 @@ export default function App() {
           />
           <EntryList
             entries={entries}
+            leavingId={leavingId}
             onEdit={(e) => {
               setEditing(e);
               window.scrollTo({ top: 0, behavior: "smooth" });
@@ -261,15 +281,15 @@ export default function App() {
       )}
 
       {confirmDelete && (
-        <div className="overlay">
-          <div className="dialog">
+        <div className={`overlay${dialogLeaving ? " leaving" : ""}`}>
+          <div className={`dialog${dialogLeaving ? " leaving" : ""}`}>
             <p>Hapus catatan ini?</p>
             <p className="dialog-sub">{confirmDelete.kegiatan}</p>
             <div className="row actions">
               <button className="danger-btn" onClick={() => void handleConfirmDelete()}>
                 Hapus
               </button>
-              <button className="secondary" onClick={() => setConfirmDelete(null)}>
+              <button className="secondary" onClick={closeDialog}>
                 Batal
               </button>
             </div>
