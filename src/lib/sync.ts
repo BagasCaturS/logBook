@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { nowIso } from "./dates";
 import {
+  getCategory,
   getDirtyCategories,
   getDirtyEntries,
   getEntry,
@@ -81,6 +82,13 @@ interface TableAdapter<TLocal> {
   idOf: (row: TLocal) => string;
   /** dipanggil sebelum baris lokal dihapus karena remote berstatus deleted (soft delete) */
   onRemoteDelete?: (row: TLocal, client: SupabaseClient) => Promise<void>;
+  /**
+   * true = pull TANPA watermark (ambil semua baris user). Dipakai untuk tabel
+   * kecil (categories) agar baris yang `updated_at`-nya lebih tua dari
+   * watermark perangkat tetap terambil — menutup celah "baris terlewat
+   * selamanya" saat fitur baru diperkenalkan.
+   */
+  fullPull?: boolean;
 }
 
 /**
@@ -127,13 +135,16 @@ async function syncTable<TLocal>(
     }
   }
 
-  // ---- PULL remote changes since watermark ----
+  // ---- PULL remote changes (watermark, atau semua baris user jika fullPull) ----
   let query = client
     .from(table)
     .select(adapter.selectColumns)
-    .gt("updated_at", watermark)
+    .eq("user_id", userId)
     .order("updated_at", { ascending: true })
     .limit(1000);
+  if (!adapter.fullPull) {
+    query = query.gt("updated_at", watermark);
+  }
 
   let rows: Record<string, unknown>[] = [];
   let stop = false;
@@ -147,6 +158,7 @@ async function syncTable<TLocal>(
       query = client
         .from(table)
         .select(adapter.selectColumns)
+        .eq("user_id", userId)
         .gt("updated_at", last)
         .order("updated_at", { ascending: true })
         .limit(1000);
@@ -198,7 +210,7 @@ const entryAdapter: TableAdapter<LogbookEntry> = {
 
 const categoryAdapter: TableAdapter<Category> = {
   selectColumns: "*",
-  getLocal: (id, userId) => getCategoryForSync(id, userId),
+  getLocal: (id, userId) => getCategory(id, userId),
   upsertLocal: upsertCategoryLocal,
   markClean: markCategoryClean,
   payload: (c) => ({
@@ -214,21 +226,17 @@ const categoryAdapter: TableAdapter<Category> = {
   fromRemote: (r, userId) => toLocalCategory(r as unknown as RemoteCategory, userId),
   touchedAt: (c) => c.updated_at,
   idOf: (c) => c.id,
+  // tabel kecil: pull penuh tiap sync agar baris lama yang terlewat
+  // watermark tetap terambil (mis. kategori dibuat sebelum perangkat
+  // mengenal fitur kategori).
+  fullPull: true,
 };
-
-async function getCategoryForSync(id: string, userId: string): Promise<Category | null> {
-  const all = await getDirtyCategories(userId);
-  const dirty = all.find((c) => c.id === id);
-  if (dirty) return dirty;
-  // categories table has no direct getter; a dirty row is the only local copy
-  // that matters for the LWW check — clean rows are always overwritten on pull.
-  return null;
-}
 
 /**
  * One sync cycle: push local dirty rows, then pull remote changes since the
- * last watermark. Last-write-wins on updated_at. Soft deletes propagate both
- * ways. Covers logbook_entries and categories with a shared watermark.
+ * last watermark (full table for fullPull adapters). Last-write-wins on
+ * updated_at. Soft deletes propagate both ways. Covers logbook_entries and
+ * categories with a shared watermark.
  */
 export async function syncNow(
   client: SupabaseClient | null,

@@ -270,6 +270,15 @@ export async function listCategories(userId: string): Promise<Category[]> {
   return rows.map(mapCategory);
 }
 
+export async function getCategory(id: string, userId: string): Promise<Category | null> {
+  const d = await ensureDb();
+  const rows = await d.select<CategoryRow[]>(
+    "SELECT * FROM categories WHERE id = $1 AND user_id = $2",
+    [id, userId]
+  );
+  return rows.length ? mapCategory(rows[0]) : null;
+}
+
 export async function addCategory(userId: string, name: string, color: string): Promise<Category> {
   const d = await ensureDb();
   const cat: Category = {
