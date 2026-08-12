@@ -206,6 +206,12 @@ const entryAdapter: TableAdapter<LogbookEntry> = {
     const paths = e.photo_paths ?? [];
     if (paths.length > 0) await deletePhotos(client, paths);
   },
+  // pull penuh tiap sync: baris yang `updated_at`-nya lebih tua dari
+  // watermark perangkat tetap terambil, termasuk perubahan konten lama
+  // (category_ids, photo_paths) yang dibuat saat perangkat masih di versi
+  // yang tidak mengenal kolom tersebut. Skala logbook pribadi sangat kecil,
+  // LWW mencegah penulisan ulang baris yang identik.
+  fullPull: true,
 };
 
 const categoryAdapter: TableAdapter<Category> = {
