@@ -2,8 +2,19 @@ import { useEffect, useMemo, useState } from "react";
 import type { Category, LogbookEntry } from "../lib/types";
 import { formatTanggal } from "../lib/dates";
 import { t, type Lang } from "../lib/i18n";
+import { plainTextFromHtml, renderEntryText } from "../lib/richtext";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import { IconPencil, IconSearch, IconTrash } from "./icons";
 import PhotoThumbs from "./PhotoThumbs";
+
+function handleContentClick(e: React.MouseEvent<HTMLDivElement>) {
+  const a = (e.target as HTMLElement).closest("a[href]");
+  if (!a) return;
+  const href = a.getAttribute("href");
+  if (!href) return;
+  e.preventDefault();
+  void openUrl(href).catch(() => window.open(href, "_blank"));
+}
 
 interface Props {
   entries: LogbookEntry[];
@@ -34,7 +45,7 @@ export default function EntryList({ entries, categories, leavingId, supabaseUrl,
     return entries.filter((e) => {
       if (mingguFilter && e.minggu !== Number(mingguFilter)) return false;
       if (categoryFilter && !(e.category_ids ?? []).includes(categoryFilter)) return false;
-      if (q && !e.kegiatan.toLowerCase().includes(q)) return false;
+      if (q && !plainTextFromHtml(e.kegiatan).toLowerCase().includes(q)) return false;
       return true;
     });
   }, [entries, filter, mingguFilter, categoryFilter]);
@@ -96,16 +107,20 @@ export default function EntryList({ entries, categories, leavingId, supabaseUrl,
                       )}
                       <span className="date">{formatTanggal(e.tanggal, lang)}</span>
                       <span className="spacer" />
-                      <button className="link" onClick={() => onEdit(e)} aria-label={`${t(lang, "list.edit")}: ${e.kegiatan.slice(0, 40)}`}>
+                      <button className="link" onClick={() => onEdit(e)} aria-label={`${t(lang, "list.edit")}: ${plainTextFromHtml(e.kegiatan).slice(0, 40)}`}>
                         <IconPencil size={13} />
                         {t(lang, "list.edit")}
                       </button>
-                      <button className="link danger" onClick={() => onDelete(e)} aria-label={`${t(lang, "list.delete")}: ${e.kegiatan.slice(0, 40)}`}>
+                      <button className="link danger" onClick={() => onDelete(e)} aria-label={`${t(lang, "list.delete")}: ${plainTextFromHtml(e.kegiatan).slice(0, 40)}`}>
                         <IconTrash size={13} />
                         {t(lang, "list.delete")}
                       </button>
                     </div>
-                    <div className="kegiatan">{e.kegiatan}</div>
+                    <div
+                      className="kegiatan"
+                      onClick={handleContentClick}
+                      dangerouslySetInnerHTML={{ __html: renderEntryText(e.kegiatan) }}
+                    />
                     {(e.category_ids ?? []).length > 0 && (
                       <div className="cat-chips cat-chips-card">
                         {e.category_ids.map((id) => {

@@ -703,6 +703,16 @@ label > span.req::after {
   color: var(--destructive);
 }
 
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+  flex: 1;
+}
+
 input,
 textarea,
 select {
@@ -1737,6 +1747,161 @@ main,
   max-height: 74vh;
   border-radius: var(--radius-sm);
   object-fit: contain;
+}
+
+/* ---------- Rich text editor ---------- */
+
+.editor-shell {
+  position: relative;
+}
+
+.editor-frame,
+.editor-shell > div:last-child {
+  display: block;
+}
+
+.editor-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 5px 6px;
+  border: 1px solid var(--border);
+  border-bottom: none;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  background: var(--surface);
+}
+
+.editor-toolbar .editor-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: none;
+  border-radius: 7px;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+  transition: background-color 150ms ease, color 150ms ease;
+}
+
+.editor-toolbar .editor-btn:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.editor-toolbar .editor-btn:active {
+  transform: scale(0.94);
+}
+
+.editor-toolbar .editor-btn.active {
+  background: var(--primary);
+  color: var(--on-primary);
+}
+
+.editor-linkbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-bottom: none;
+  background: var(--surface-2);
+}
+
+.editor-linkbar input {
+  flex: 1;
+  min-width: 160px;
+  padding: 7px 10px;
+  font-size: 13px;
+}
+
+.editor-linkbar button {
+  padding: 7px 12px;
+  font-size: 13px;
+}
+
+.editor-link-error {
+  width: 100%;
+  font-size: 12.5px;
+}
+
+.editor-prose {
+  min-height: 84px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-top: none;
+  border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+  background: var(--surface);
+  outline: none;
+  font-weight: 500;
+  font-size: 13.5px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.editor-shell:focus-within .editor-toolbar,
+.editor-shell:focus-within .editor-linkbar,
+.editor-shell:focus-within .editor-prose {
+  border-color: var(--primary);
+}
+
+.editor-shell:focus-within .editor-prose {
+  box-shadow: 0 0 0 3px var(--ring);
+}
+
+.editor-prose p {
+  margin: 0 0 2px;
+}
+
+.editor-prose ul,
+.editor-prose ol {
+  padding-left: 22px;
+  margin: 4px 0;
+}
+
+.editor-prose li {
+  margin: 2px 0;
+}
+
+.editor-prose a {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+.editor-prose strong {
+  font-weight: 700;
+}
+
+.editor-shell.ph-empty .editor-prose::before {
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  color: var(--muted);
+  opacity: 0.75;
+  pointer-events: none;
+  font-weight: 500;
+}
+
+/* ---------- Rich text display (list & calendar) ---------- */
+
+.kegiatan a {
+  color: var(--accent);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.kegiatan ul,
+.kegiatan ol {
+  padding-left: 22px;
+  margin: 4px 0;
+}
+
+.kegiatan p {
+  margin: 2px 0;
 }
 
 /* ---------- Responsive ---------- */

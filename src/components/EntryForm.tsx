@@ -4,6 +4,8 @@ import { computeMinggu, todayIso } from "../lib/dates";
 import { t, type Lang } from "../lib/i18n";
 import { MAX_PHOTOS, isBigFile, photoUrl, type PhotoOps } from "../lib/photos";
 import { errMessage } from "../lib/sync";
+import { plainTextFromHtml, sanitizeHtml } from "../lib/richtext";
+import RichEditor from "./RichEditor";
 
 interface Props {
   startDate: string;
@@ -142,7 +144,7 @@ export default function EntryForm({
   }
 
   async function submit() {
-    if (!kegiatan.trim()) {
+    if (!plainTextFromHtml(kegiatan).trim()) {
       setError(t(lang, "form.errKegiatan"));
       return;
     }
@@ -160,7 +162,7 @@ export default function EntryForm({
     try {
       await onSave(
         {
-          kegiatan: kegiatan.trim(),
+          kegiatan: sanitizeHtml(kegiatan.trim()),
           tanggal,
           minggu: m,
           hari_ke: auto.hariKe ?? null,
@@ -181,15 +183,15 @@ export default function EntryForm({
   return (
     <div className={`form${editing ? " editing" : ""}`}>
       <h3>{editing ? t(lang, "form.editTitle") : t(lang, "form.addTitle")}</h3>
-      <label>
-        {t(lang, "form.kegiatan")}
-        <textarea
-          rows={3}
+      <div className="form-field">
+        <span>{t(lang, "form.kegiatan")}</span>
+        <RichEditor
           value={kegiatan}
-          onChange={(e) => setKegiatan(e.target.value)}
           placeholder={t(lang, "form.kegiatanPlaceholder")}
+          lang={lang}
+          onChange={setKegiatan}
         />
-      </label>
+      </div>
       <div className="row">
         <label>
           {t(lang, "form.tanggal")}

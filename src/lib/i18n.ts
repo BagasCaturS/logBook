@@ -72,6 +72,22 @@ const dict: Record<string, { id: string; en: string }> = {
   "form.categoryPlaceholder": { id: "Nama kategori (mis. Belajar, Meeting)", en: "Category name (e.g. Learning, Meeting)" },
   "form.errCategory": { id: "Nama kategori tidak boleh kosong.", en: "Category name cannot be empty." },
 
+  // rich text editor
+  "editor.bold": { id: "Tebal", en: "Bold" },
+  "editor.italic": { id: "Miring", en: "Italic" },
+  "editor.underline": { id: "Garis bawah", en: "Underline" },
+  "editor.strike": { id: "Coret", en: "Strikethrough" },
+  "editor.link": { id: "Tautan", en: "Link" },
+  "editor.linkText": { id: "Teks tautan", en: "Link text" },
+  "editor.linkUrl": { id: "URL tautan", en: "Link URL" },
+  "editor.linkApply": { id: "Terapkan", en: "Apply" },
+  "editor.linkRemove": { id: "Hapus Tautan", en: "Remove Link" },
+  "editor.linkInvalid": { id: "URL tidak valid.", en: "Invalid URL." },
+  "editor.linkTextEmpty": {
+    id: "Teks tautan tidak boleh kosong.",
+    en: "Link text cannot be empty.",
+  },
+
   // list
   "list.search": { id: "Cari kegiatan...", en: "Search activities..." },
   "list.filterMinggu": { id: "Minggu ke-?", en: "Week #" },

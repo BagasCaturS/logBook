@@ -18,6 +18,7 @@ import {
 } from "./lib/db";
 import { formatDateTime } from "./lib/dates";
 import { t } from "./lib/i18n";
+import { plainTextFromHtml } from "./lib/richtext";
 import { getClient, getCurrentSession, onAuthChange, signIn, signOut, signUp } from "./lib/supabase";
 import { deletePhotos, uploadPhoto, type PhotoOps } from "./lib/photos";
 import { loadSettings, saveSettings } from "./lib/settings";
@@ -486,7 +487,9 @@ export default function App() {
                 ? t(lang, "settings.deleteCategoryConfirm")
                 : t(lang, "dialog.deleteEntry")}
             </p>
-            {confirmDelete && <p className="dialog-sub">{confirmDelete.kegiatan}</p>}
+            {confirmDelete && (
+              <p className="dialog-sub">{plainTextFromHtml(confirmDelete.kegiatan)}</p>
+            )}
             {confirmDeleteCategory && (
               <p className="dialog-sub">
                 <span
