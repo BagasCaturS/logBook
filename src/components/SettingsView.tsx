@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { formatDateTime, todayIso } from "../lib/dates";
 import { THEMES } from "../lib/themes";
 import { LANGS, t, type Lang } from "../lib/i18n";
+import { DEFAULT_HOUR_LABEL } from "../lib/settings";
 import { IconRefresh, IconLogout } from "./icons";
 import type { Category, LogbookEntry } from "../lib/types";
 import type { DownloadProgress, UpdateInfo } from "../lib/update";
@@ -22,6 +23,8 @@ interface Props {
   categories: Category[];
   entries: LogbookEntry[];
   userId: string;
+  hourStart: string;
+  hourLabel: string;
   updateInfo: UpdateInfo | null;
   updateState: string;
   updateError: string | null;
@@ -30,6 +33,7 @@ interface Props {
   onInstallUpdate: () => void;
   onRestored: () => void;
   onSaveStartDate: (d: string) => void;
+  onSaveHours: (start: string, label: string) => void;
   onSaveTheme: (id: string) => void;
   onSaveLang: (l: Lang) => void;
   onDeleteCategory: (c: Category) => void;
@@ -49,6 +53,8 @@ export default function SettingsView({
   categories,
   entries,
   userId,
+  hourStart,
+  hourLabel,
   updateInfo,
   updateState,
   updateError,
@@ -57,6 +63,7 @@ export default function SettingsView({
   onInstallUpdate,
   onRestored,
   onSaveStartDate,
+  onSaveHours,
   onSaveTheme,
   onSaveLang,
   onDeleteCategory,
@@ -65,6 +72,9 @@ export default function SettingsView({
 }: Props) {
   const [draft, setDraft] = useState(startDate);
   const dirty = draft !== startDate;
+  const [hourDraft, setHourDraft] = useState(hourStart);
+  const [labelDraft, setLabelDraft] = useState(hourLabel);
+  const hourDirty = hourDraft !== hourStart || labelDraft !== hourLabel;
   const [savedPhase, setSavedPhase] = useState<"show" | "leave" | null>(null);
   const [rangeSel, setRangeSel] = useState("all");
   const [task, setTask] = useState<"export" | "save" | "restore" | null>(null);
@@ -132,7 +142,7 @@ export default function SettingsView({
         setNoteErr(t(lang, "export.empty"));
         return;
       }
-      const data = buildPdf(sel, categories, lang, range);
+      const data = buildPdf(sel, categories, lang, range, hourLabel);
       const path = await savePdf(data, `logbook-${todayIso()}.pdf`);
       if (path) setNote(t(lang, "export.done"));
     } catch (e) {
@@ -185,233 +195,336 @@ export default function SettingsView({
   }
 
   return (
-    <div className="form">
-      <h3>{t(lang, "settings.title")}</h3>
-
-      <div className="theme-picker">
-        <label>{t(lang, "settings.theme")}</label>
-        <div className="theme-grid">
-          {THEMES.map((th) => (
-            <button
-              key={th.id}
-              className={`theme-card${th.id === theme ? " active" : ""}`}
-              onClick={() => onSaveTheme(th.id)}
-              aria-pressed={th.id === theme}
-              aria-label={`${t(lang, "settings.theme")}: ${th.name}`}
-            >
-              <span className="swatches" aria-hidden>
-                {th.colors.map((c) => (
-                  <span key={c} className="swatch" style={{ background: c }} />
-                ))}
-              </span>
-              <span className="theme-name">{th.name}</span>
-            </button>
-          ))}
+    <div className="form settings">
+      <div className="set-head">
+        <div className="set-head-text">
+          <h3 className="set-title">{t(lang, "settings.title")}</h3>
+          <p className="set-sub">{t(lang, "settings.subtitle")}</p>
         </div>
-      </div>
-
-      <label>
-        {t(lang, "settings.lang")}
-        <select value={lang} onChange={(e) => onSaveLang(e.target.value as Lang)}>
-          {LANGS.map((l) => (
-            <option key={l.id} value={l.id}>
-              {l.name}
-            </option>
-          ))}
-        </select>
-      </label>
-
-      <label>
-        {t(lang, "settings.startDate")}
-        <input type="date" value={draft} onChange={(e) => setDraft(e.target.value)} />
-      </label>
-      {draft && (
-        <p className="hint">{t(lang, "settings.startDateHint")}</p>
-      )}
-      <div className="row actions">
-        <button
-          disabled={!dirty}
-          onClick={() => {
-            onSaveStartDate(draft);
-            setSavedPhase("show");
-          }}
-        >
-          {t(lang, "settings.save")}
-        </button>
-        <button className="secondary" onClick={onBack}>
+        <button className="danger-soft" onClick={onBack}>
           {t(lang, "settings.back")}
         </button>
       </div>
-      {savedPhase && (
-        <p
-          className={`info saved-toast${savedPhase === "leave" ? " leaving" : ""}`}
-          role="status"
-        >
-          {t(lang, "form.saved")}
-        </p>
-      )}
-      <hr />
-      <h3>{t(lang, "settings.categoriesTitle")}</h3>
-      <p className="hint">{t(lang, "settings.categoriesHint")}</p>
-      {categories.length === 0 ? (
-        <p className="hint">{t(lang, "settings.noCategories")}</p>
-      ) : (
-        <ul className="cat-manage-list">
-          {categories.map((c) => (
-            <li key={c.id}>
-              <span className="cat-chip" style={{ background: c.color, color: "#fff" }}>
-                {c.name}
-              </span>
-              <button className="link danger" onClick={() => onDeleteCategory(c)}>
-                {t(lang, "list.delete")}
+
+      <section className="set-section" aria-labelledby="set-head-appearance">
+        <h4 className="set-section-title" id="set-head-appearance">
+          {t(lang, "settings.sectionAppearance")}
+        </h4>
+        <div className="theme-picker">
+          <div className="theme-grid">
+            {THEMES.map((th) => (
+              <button
+                key={th.id}
+                className={`theme-card${th.id === theme ? " active" : ""}`}
+                onClick={() => onSaveTheme(th.id)}
+                aria-pressed={th.id === theme}
+                aria-label={`${t(lang, "settings.theme")}: ${th.name}`}
+              >
+                <span className="swatches" aria-hidden>
+                  {th.colors.map((c) => (
+                    <span key={c} className="swatch" style={{ background: c }} />
+                  ))}
+                </span>
+                <span className="theme-name">
+                  {th.id === theme && (
+                    <span className="theme-check" aria-hidden>
+                      ✓
+                    </span>
+                  )}
+                  {th.name}
+                </span>
               </button>
-            </li>
-          ))}
-        </ul>
-      )}
-      <hr />
-      <h3>{t(lang, "export.title")}</h3>
-      <p className="hint">{t(lang, "export.hint")}</p>
-      <label>
-        {t(lang, "export.rangeLabel")}
-        <select value={rangeSel} onChange={(e) => setRangeSel(e.target.value)}>
-          {rangeOptions.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
-          ))}
-        </select>
-      </label>
-      <div className="row actions">
-        <button disabled={task !== null} onClick={() => void handleExport()}>
-          {task === "export" ? t(lang, "export.exporting") : t(lang, "export.button")}
-        </button>
-      </div>
-      {note && (
-        <p className="info" role="status">
-          {note}
-        </p>
-      )}
-      {noteErr && (
-        <p className="error" role="alert">
-          {noteErr}
-        </p>
-      )}
-      <hr />
-      <h3>{t(lang, "backup.title")}</h3>
-      <p className="hint">{t(lang, "backup.hint")}</p>
-      <div className="row actions">
-        <button className="secondary" disabled={task !== null} onClick={() => void handleSaveBackup()}>
-          {task === "save" ? t(lang, "backup.saving") : t(lang, "backup.save")}
-        </button>
-        <button disabled={task !== null} onClick={() => setConfirmRestore(true)}>
-          {t(lang, "backup.restore")}
-        </button>
-      </div>
-      {confirmRestore && (
-        <div className="overlay">
-          <div className="dialog">
-            <p>
-              <strong>{t(lang, "backup.confirmTitle")}</strong>
+            ))}
+          </div>
+        </div>
+        <label>
+          {t(lang, "settings.lang")}
+          <select value={lang} onChange={(e) => onSaveLang(e.target.value as Lang)}>
+            {LANGS.map((l) => (
+              <option key={l.id} value={l.id}>
+                {l.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      </section>
+
+      <section className="set-section" aria-labelledby="set-head-period">
+        <h4 className="set-section-title" id="set-head-period">
+          {t(lang, "settings.sectionPeriod")}
+        </h4>
+        <div className="set-cols">
+          <div className="set-fieldset">
+            <p className="set-fieldset-title">{t(lang, "settings.startDate")}</p>
+            <input
+              type="date"
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              aria-label={t(lang, "settings.startDate")}
+            />
+            {draft && <p className="hint">{t(lang, "settings.startDateHint")}</p>}
+            <div className="row set-fieldset-actions">
+              <button
+                disabled={!dirty}
+                onClick={() => {
+                  onSaveStartDate(draft);
+                  setSavedPhase("show");
+                }}
+              >
+                {t(lang, "settings.save")}
+              </button>
+            </div>
+          </div>
+          <div className="set-fieldset">
+            <p className="set-fieldset-title">{t(lang, "settings.hourTitle")}</p>
+            <div className="row">
+              <label>
+                {t(lang, "settings.hourStart")}
+                <input
+                  type="time"
+                  value={hourDraft}
+                  onChange={(e) => setHourDraft(e.target.value)}
+                />
+              </label>
+              <label>
+                {t(lang, "settings.hourLabel")}
+                <input
+                  type="text"
+                  value={labelDraft}
+                  onChange={(e) => setLabelDraft(e.target.value)}
+                  placeholder={DEFAULT_HOUR_LABEL}
+                />
+              </label>
+            </div>
+            <p className="hint">
+              {t(lang, "settings.hourStartHint")} {t(lang, "settings.hourLabelHint")}
             </p>
-            <p className="dialog-sub">{t(lang, "backup.confirmText")}</p>
-            <div className="row actions">
-              <button disabled={task === "restore"} onClick={() => void handleRestore()}>
-                {task === "restore" ? t(lang, "backup.restoring") : t(lang, "backup.confirm")}
-              </button>
-              <button className="secondary" onClick={() => setConfirmRestore(false)}>
-                {t(lang, "dialog.cancel")}
+            <div className="row set-fieldset-actions">
+              <button
+                disabled={!hourDirty}
+                onClick={() => {
+                  onSaveHours(hourDraft, labelDraft.trim() || DEFAULT_HOUR_LABEL);
+                  setSavedPhase("show");
+                }}
+              >
+                {t(lang, "settings.save")}
               </button>
             </div>
           </div>
         </div>
-      )}
-      <hr />
-      <div className="settings-meta">
-        <p>
-          <strong>{t(lang, "settings.account")}</strong> {email ?? "-"}
-        </p>
-        <p>
-          <strong>{t(lang, "settings.syncStatus")}</strong> {syncState}
-          {lastSyncAt
-            ? ` · ${t(lang, "settings.lastSync", { time: formatDateTime(lastSyncAt) })}`
-            : ""}
-        </p>
-      </div>
-      {syncError && (
-        <p className="error" role="alert">
-          Error: {syncError}
-        </p>
-      )}
-      <div className="row actions">
-        <button className="secondary" onClick={onLogout}>
-          <IconLogout size={15} />
-          {t(lang, "settings.logout")}
-        </button>
-      </div>
-      <hr />
-      <h3>{t(lang, "settings.update")}</h3>
-      <p className="settings-meta">
-        <strong>{t(lang, "settings.version")}</strong> {appVersion || "-"}
-        {updateInfo && (
-          <span>
-            . {t(lang, "settings.versionAvailable")}{" "}
-            <span className="badge">v{updateInfo.version}</span>
-          </span>
+        {savedPhase && (
+          <p
+            className={`info saved-toast${savedPhase === "leave" ? " leaving" : ""}`}
+            role="status"
+          >
+            {t(lang, "form.saved")}
+          </p>
         )}
-      </p>
-      {updateInfo && (
-        <div className="changelog">{updateInfo.body || t(lang, "settings.newRelease")}</div>
-      )}
-      {updateState === "checking" && <p className="hint">{t(lang, "settings.checking")}</p>}
-      {updateState === "up-to-date" && (
-        <p className="info" role="status">
-          {t(lang, "settings.upToDate")}
-        </p>
-      )}
-      {updateState === "downloading" && (
-        <div className="update-download">
-          {pct !== null ? (
-            <>
-              <div className="progress">
-                <span style={{ width: `${pct}%` }} />
+      </section>
+
+      <section className="set-section" aria-labelledby="set-head-cats">
+        <h4 className="set-section-title" id="set-head-cats">
+          {t(lang, "settings.categoriesTitle")}
+          {categories.length > 0 && (
+            <span className="count-badge">
+              {t(lang, "settings.categoryCount", { n: categories.length })}
+            </span>
+          )}
+        </h4>
+        <p className="hint">{t(lang, "settings.categoriesHint")}</p>
+        {categories.length === 0 ? (
+          <p className="hint">{t(lang, "settings.noCategories")}</p>
+        ) : (
+          <div className="cat-manage">
+            {categories.map((c) => (
+              <span key={c.id} className="cat-manage-item">
+                <span className="cat-manage-chip">
+                  <span className="cat-dot" style={{ background: c.color }} />
+                  {c.name}
+                </span>
+                <button
+                  className="cat-manage-x"
+                  onClick={() => onDeleteCategory(c)}
+                  aria-label={`${t(lang, "list.delete")}: ${c.name}`}
+                  title={t(lang, "list.delete")}
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="set-section" aria-labelledby="set-head-data">
+        <h4 className="set-section-title" id="set-head-data">
+          {t(lang, "settings.sectionData")}
+        </h4>
+        <p className="hint">{t(lang, "export.hint")}</p>
+        <div className="set-data-row">
+          <div className="set-data-main">
+            <p className="set-fieldset-title">{t(lang, "export.title")}</p>
+            <label>
+              {t(lang, "export.rangeLabel")}
+              <select value={rangeSel} onChange={(e) => setRangeSel(e.target.value)}>
+                {rangeOptions.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <button disabled={task !== null} onClick={() => void handleExport()}>
+            {task === "export" ? t(lang, "export.exporting") : t(lang, "export.button")}
+          </button>
+        </div>
+        <div className="set-data-row">
+          <div className="set-data-main">
+            <p className="set-fieldset-title">{t(lang, "backup.title")}</p>
+            <p className="hint">{t(lang, "backup.hint")}</p>
+          </div>
+          <div className="row actions">
+            <button
+              className="secondary"
+              disabled={task !== null}
+              onClick={() => void handleSaveBackup()}
+            >
+              {task === "save" ? t(lang, "backup.saving") : t(lang, "backup.save")}
+            </button>
+            <button disabled={task !== null} onClick={() => setConfirmRestore(true)}>
+              {t(lang, "backup.restore")}
+            </button>
+          </div>
+        </div>
+        {note && (
+          <p className="info" role="status">
+            {note}
+          </p>
+        )}
+        {noteErr && (
+          <p className="error" role="alert">
+            {noteErr}
+          </p>
+        )}
+        {confirmRestore && (
+          <div className="overlay">
+            <div className="dialog">
+              <p>
+                <strong>{t(lang, "backup.confirmTitle")}</strong>
+              </p>
+              <p className="dialog-sub">{t(lang, "backup.confirmText")}</p>
+              <div className="row actions">
+                <button disabled={task === "restore"} onClick={() => void handleRestore()}>
+                  {task === "restore" ? t(lang, "backup.restoring") : t(lang, "backup.confirm")}
+                </button>
+                <button className="secondary" onClick={() => setConfirmRestore(false)}>
+                  {t(lang, "dialog.cancel")}
+                </button>
               </div>
-              <p className="hint">{t(lang, "settings.downloading", { pct })}</p>
-            </>
-          ) : (
-            <>
-              <div className="progress indeterminate">
-                <span />
-              </div>
-              <p className="hint">{t(lang, "settings.downloadingIndet")}</p>
-            </>
+            </div>
+          </div>
+        )}
+      </section>
+
+      <section className="set-section" aria-labelledby="set-head-account">
+        <h4 className="set-section-title" id="set-head-account">
+          {t(lang, "settings.sectionAccount")}
+        </h4>
+        <div className="settings-meta">
+          <p>
+            <span>{t(lang, "settings.account")}</span>
+            <strong>{email ?? "-"}</strong>
+          </p>
+          <p>
+            <span>{t(lang, "settings.syncStatus")}</span>
+            <strong>
+              {syncState}
+              {lastSyncAt
+                ? ` · ${t(lang, "settings.lastSync", { time: formatDateTime(lastSyncAt) })}`
+                : ""}
+            </strong>
+          </p>
+        </div>
+        {syncError && (
+          <p className="error" role="alert">
+            Error: {syncError}
+          </p>
+        )}
+        <div className="row actions">
+          <button className="secondary" onClick={onLogout}>
+            <IconLogout size={15} />
+            {t(lang, "settings.logout")}
+          </button>
+        </div>
+      </section>
+
+      <section className="set-section" aria-labelledby="set-head-app">
+        <h4 className="set-section-title" id="set-head-app">
+          {t(lang, "settings.update")}
+        </h4>
+        <div className="settings-meta">
+          <p>
+            <span>{t(lang, "settings.version")}</span>
+            <strong>{appVersion || "-"}</strong>
+          </p>
+        </div>
+        {updateInfo && (
+          <p className="hint">
+            {t(lang, "settings.versionAvailable")} <span className="badge">v{updateInfo.version}</span>
+          </p>
+        )}
+        {updateInfo && (
+          <div className="changelog">{updateInfo.body || t(lang, "settings.newRelease")}</div>
+        )}
+        {updateState === "checking" && <p className="hint">{t(lang, "settings.checking")}</p>}
+        {updateState === "up-to-date" && (
+          <p className="info" role="status">
+            {t(lang, "settings.upToDate")}
+          </p>
+        )}
+        {updateState === "downloading" && (
+          <div className="update-download">
+            {pct !== null ? (
+              <>
+                <div className="progress">
+                  <span style={{ width: `${pct}%` }} />
+                </div>
+                <p className="hint">{t(lang, "settings.downloading", { pct })}</p>
+              </>
+            ) : (
+              <>
+                <div className="progress indeterminate">
+                  <span />
+                </div>
+                <p className="hint">{t(lang, "settings.downloadingIndet")}</p>
+              </>
+            )}
+          </div>
+        )}
+        {updateState === "ready" && (
+          <p className="info" role="status">
+            {t(lang, "settings.ready")}
+          </p>
+        )}
+        {updateState === "error" && (
+          <p className="error" role="alert">
+            {t(lang, "settings.updateError", { error: updateError ?? "-" })}
+          </p>
+        )}
+        <div className="row actions">
+          <button className="secondary" disabled={busy} onClick={onCheckUpdate}>
+            <IconRefresh size={15} />
+            {t(lang, "settings.checkUpdate")}
+          </button>
+          {updateInfo && !busy && updateState !== "ready" && (
+            <button onClick={onInstallUpdate}>{t(lang, "settings.downloadInstall")}</button>
           )}
         </div>
-      )}
-      {updateState === "ready" && (
-        <p className="info" role="status">
-          {t(lang, "settings.ready")}
-        </p>
-      )}
-      {updateState === "error" && (
-        <p className="error" role="alert">
-          {t(lang, "settings.updateError", { error: updateError ?? "-" })}
-        </p>
-      )}
-      <div className="row actions">
-        <button className="secondary" disabled={busy} onClick={onCheckUpdate}>
-          <IconRefresh size={15} />
-          {t(lang, "settings.checkUpdate")}
-        </button>
-        {updateInfo && !busy && updateState !== "ready" && (
-          <button onClick={onInstallUpdate}>{t(lang, "settings.downloadInstall")}</button>
-        )}
-      </div>
-      <hr />
-      <h3>{t(lang, "settings.about")}</h3>
-      <p className="settings-meta">
-        <strong>{t(lang, "settings.madeBy")}</strong>{" "}
-        {t(lang, "settings.aboutLine", { version: appVersion || "-" })}
+      </section>
+
+      <p className="set-footer">
+        {t(lang, "settings.madeBy")} {t(lang, "settings.aboutLine", { version: appVersion || "-" })}
       </p>
     </div>
   );

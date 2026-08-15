@@ -17,7 +17,7 @@ export interface ExportRange {
 // Lebar tetap kolom "Kegiatan" (78mm): total 182mm tersedia dikurangi kolom tetap
 // 28+18+18+40 = 104mm. Dengan lebar deterministik, layout rich text (didParseCell)
 // dan tinggi baris (autotable) selalu konsisten.
-const KEGIATAN_COL = 3;
+const KEGIATAN_COL = 4;
 const KEGIATAN_WIDTH = 78;
 const CELL_PADDING_H = 4; // cellPadding default 2 → horizontal 4
 
@@ -35,7 +35,8 @@ export function buildPdf(
   entries: LogbookEntry[],
   categories: Category[],
   lang: Lang,
-  range: ExportRange
+  range: ExportRange,
+  hourLabel = "hour"
 ): Uint8Array {
   const doc = new jsPDF({ unit: "mm", format: "a4" });
   const catName = new Map(categories.map((c) => [c.id, c.name]));
@@ -63,11 +64,12 @@ export function buildPdf(
 
   autoTable(doc, {
     startY: 33,
-    head: [[t(lang, "pdf.colTanggal"), t(lang, "pdf.colMinggu"), t(lang, "pdf.colHari"), t(lang, "pdf.colKegiatan"), t(lang, "pdf.colKategori")]],
+    head: [[t(lang, "pdf.colTanggal"), t(lang, "pdf.colMinggu"), t(lang, "pdf.colHari"), hourLabel, t(lang, "pdf.colKegiatan"), t(lang, "pdf.colKategori")]],
     body: entries.map((e) => [
       formatTanggal(e.tanggal, lang),
       String(e.minggu),
       e.hari_ke !== null ? String(e.hari_ke) : "-",
+      e.jam !== null ? String(e.jam) : "-",
       e.kegiatan,
       (e.category_ids ?? [])
         .map((id) => catName.get(id))
@@ -81,8 +83,9 @@ export function buildPdf(
       0: { cellWidth: 28 },
       1: { cellWidth: 18 },
       2: { cellWidth: 18 },
-      3: { cellWidth: KEGIATAN_WIDTH },
-      4: { cellWidth: 40 },
+      3: { cellWidth: 16 },
+      4: { cellWidth: KEGIATAN_WIDTH },
+      5: { cellWidth: 40 },
     },
     didParseCell: (data) => {
       const cell = data.cell as unknown as {

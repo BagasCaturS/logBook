@@ -6,6 +6,7 @@ import {
   formatDateTime,
   formatMonthYear,
   getMonthGrid,
+  hoursElapsed,
 } from "./dates";
 
 describe("computeMinggu", () => {
@@ -132,5 +133,44 @@ describe("getMonthGrid", () => {
     const grid = getMonthGrid(2026, 11);
     expect(grid[0]).toEqual({ date: "2026-11-30", inMonth: false });
     expect(grid[1]).toEqual({ date: "2026-12-01", inMonth: true });
+  });
+});
+
+describe("hoursElapsed", () => {
+  const at = (hm: string) => {
+    const d = new Date(2026, 7, 15);
+    const [h, m] = hm.split(":").map(Number);
+    d.setHours(h, m, 0, 0);
+    return d;
+  };
+
+  it("15:23 sejak 11:00 = 4 jam (contoh utama)", () => {
+    expect(hoursElapsed(at("15:23"), "11:00")).toBe(4);
+  });
+
+  it("tepat di jam mulai = 0", () => {
+    expect(hoursElapsed(at("11:00"), "11:00")).toBe(0);
+  });
+
+  it("sebelum jam mulai di-clamp ke 0", () => {
+    expect(hoursElapsed(at("10:59"), "11:00")).toBe(0);
+  });
+
+  it("tepat 1 jam kemudian = 1", () => {
+    expect(hoursElapsed(at("12:00"), "11:00")).toBe(1);
+  });
+
+  it("59 menit belum dihitung (floor)", () => {
+    expect(hoursElapsed(at("11:59"), "11:00")).toBe(0);
+  });
+
+  it("23:59 sejak 11:00 = 12", () => {
+    expect(hoursElapsed(at("23:59"), "11:00")).toBe(12);
+  });
+
+  it("format tidak valid = null", () => {
+    expect(hoursElapsed(at("15:00"), "25:00")).toBeNull();
+    expect(hoursElapsed(at("15:00"), "11-00")).toBeNull();
+    expect(hoursElapsed(at("15:00"), "")).toBeNull();
   });
 });

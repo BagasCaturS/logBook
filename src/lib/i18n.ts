@@ -62,6 +62,14 @@ const dict: Record<string, { id: string; en: string }> = {
   "form.errKegiatan": { id: "Kegiatan tidak boleh kosong.", en: "Activity cannot be empty." },
   "form.errTanggal": { id: "Pilih tanggal.", en: "Pick a date." },
   "form.errMinggu": { id: "Minggu ke-? harus angka ≥ 1.", en: "Week # must be a number ≥ 1." },
+  "form.errJam": {
+    id: "Jam harus angka bulat ≥ 0 atau kosong.",
+    en: "Hours must be a whole number ≥ 0, or empty.",
+  },
+  "form.jamHint": {
+    id: "Terisi otomatis dari jam mulai (Pengaturan) hingga sekarang untuk entri hari ini.",
+    en: "Auto-filled from the start time (Settings) until now for today's entries.",
+  },
   "form.saving": { id: "Menyimpan...", en: "Saving..." },
   "form.saveChanges": { id: "Simpan Perubahan", en: "Save Changes" },
   "form.add": { id: "Tambah", en: "Add" },
@@ -138,6 +146,20 @@ const dict: Record<string, { id: string; en: string }> = {
   },
   "settings.save": { id: "Simpan", en: "Save" },
   "settings.back": { id: "Kembali", en: "Back" },
+  "settings.hourTitle": { id: "Jam kerja", en: "Work hours" },
+  "settings.hourStart": {
+    id: "Jam mulai harian (dasar hitungan jam)",
+    en: "Daily start time (hours base)",
+  },
+  "settings.hourStartHint": {
+    id: "Jam entri dihitung otomatis dari jam ini hingga sekarang, contoh: 15:23 − 11:00 = 4.",
+    en: "Entry hours are counted automatically from this time until now, e.g. 15:23 − 11:00 = 4.",
+  },
+  "settings.hourLabel": { id: "Label jam", en: "Hours label" },
+  "settings.hourLabelHint": {
+    id: "Teks yang tampil sebelum angka, mis. \"hour\", \"jam\", \"poin\".",
+    en: "Text shown before the number, e.g. \"hour\", \"jam\", \"points\".",
+  },
   "settings.account": { id: "Akun", en: "Account" },
   "settings.syncStatus": { id: "Status sinkron", en: "Sync status" },
   "settings.lastSync": { id: "terakhir {time}", en: "last {time}" },
@@ -173,6 +195,15 @@ const dict: Record<string, { id: string; en: string }> = {
     id: "Hapus kategori ini dari semua entri?",
     en: "Remove this category from all entries?",
   },
+  "settings.subtitle": {
+    id: "Kelola tampilan, periode, kategori, dan data aplikasi.",
+    en: "Manage appearance, period, categories, and app data.",
+  },
+  "settings.sectionAppearance": { id: "Tampilan", en: "Appearance" },
+  "settings.sectionPeriod": { id: "Periode & jam", en: "Period & hours" },
+  "settings.sectionData": { id: "Data & cadangan", en: "Data & backup" },
+  "settings.sectionAccount": { id: "Akun", en: "Account" },
+  "settings.categoryCount": { id: "{n} kategori", en: "{n} categories" },
 
   // export PDF
   "export.title": { id: "Ekspor PDF", en: "Export PDF" },

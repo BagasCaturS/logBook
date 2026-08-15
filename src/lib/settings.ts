@@ -4,6 +4,11 @@ import { isValidLang } from "./i18n";
 
 const KEY = "logbook.settings.v1";
 
+const HH_MM = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+export const DEFAULT_HOUR_START = "11:00";
+export const DEFAULT_HOUR_LABEL = "hour";
+
 export const DEFAULT_SETTINGS: AppSettings = {
   supabaseUrl: "https://uuvdyzfokdbnfevknawa.supabase.co",
   supabaseAnonKey: "sb_publishable_F7mvG100KvD3VspxQL9CBw_MPBYKd7X",
@@ -11,6 +16,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   lastSyncAt: null,
   theme: DEFAULT_THEME,
   lang: "id",
+  hourStart: DEFAULT_HOUR_START,
+  hourLabel: DEFAULT_HOUR_LABEL,
 };
 
 export function loadSettings(): AppSettings {
@@ -28,6 +35,15 @@ export function loadSettings(): AppSettings {
       theme: isValidTheme(stored.theme) ? stored.theme : DEFAULT_THEME,
       // unknown language falls back to Indonesian
       lang: isValidLang(stored.lang) ? stored.lang : DEFAULT_SETTINGS.lang,
+      // invalid hour settings fall back to defaults
+      hourStart: (() => {
+        const hs = stored.hourStart;
+        return hs !== undefined && HH_MM.test(hs) ? hs : DEFAULT_HOUR_START;
+      })(),
+      hourLabel:
+        typeof stored.hourLabel === "string" && stored.hourLabel.trim()
+          ? stored.hourLabel.trim()
+          : DEFAULT_HOUR_LABEL,
     };
   } catch {
     return { ...DEFAULT_SETTINGS };

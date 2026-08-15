@@ -22,6 +22,7 @@ interface Props {
   leavingId?: string | null;
   supabaseUrl: string;
   lang: Lang;
+  hourLabel: string;
   onEdit: (e: LogbookEntry) => void;
   onDelete: (e: LogbookEntry) => void;
   onOpenPhoto: (url: string) => void;
@@ -29,7 +30,7 @@ interface Props {
 
 const PAGE_SIZE = 20;
 
-export default function EntryList({ entries, categories, leavingId, supabaseUrl, lang, onEdit, onDelete, onOpenPhoto }: Props) {
+export default function EntryList({ entries, categories, leavingId, supabaseUrl, lang, hourLabel, onEdit, onDelete, onOpenPhoto }: Props) {
   const [filter, setFilter] = useState("");
   const [mingguFilter, setMingguFilter] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
@@ -104,6 +105,9 @@ export default function EntryList({ entries, categories, leavingId, supabaseUrl,
                       <span className="badge">{t(lang, "list.mingguBadge", { minggu: e.minggu })}</span>
                       {e.hari_ke !== null && (
                         <span className="badge violet">{t(lang, "list.hariBadge", { hari: e.hari_ke })}</span>
+                      )}
+                      {e.jam !== null && (
+                        <span className="badge amber">{hourLabel} - {e.jam}</span>
                       )}
                       <span className="date">{formatTanggal(e.tanggal, lang)}</span>
                       <span className="spacer" />

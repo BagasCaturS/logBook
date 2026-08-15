@@ -9,6 +9,7 @@ interface Row {
   tanggal: string;
   minggu: number;
   hari_ke: number | null;
+  jam: number | null;
   category_ids: string;
   photo_paths: string;
   created_at: string;
@@ -60,6 +61,10 @@ export async function ensureDb(): Promise<Database> {
       "ALTER TABLE logbook_entries ADD COLUMN photo_paths TEXT NOT NULL DEFAULT '[]'"
     );
   }
+  // migration: jam column (added in 0.7.0)
+  if (!cols.some((c) => c.name === "jam")) {
+    await db.execute("ALTER TABLE logbook_entries ADD COLUMN jam INTEGER");
+  }
   await db.execute("CREATE INDEX IF NOT EXISTS idx_entries_user_tanggal ON logbook_entries (user_id, tanggal DESC)");
   await db.execute(`
     CREATE TABLE IF NOT EXISTS categories (
@@ -95,6 +100,7 @@ function mapRow(r: Row): LogbookEntry {
     tanggal: r.tanggal.slice(0, 10),
     minggu: r.minggu,
     hari_ke: r.hari_ke ?? null,
+    jam: r.jam ?? null,
     category_ids: parseIds(r.category_ids),
     photo_paths: parseIds(r.photo_paths),
     created_at: r.created_at,
@@ -145,6 +151,7 @@ export async function addEntry(userId: string, input: EntryInput): Promise<Logbo
     tanggal: input.tanggal,
     minggu: input.minggu,
     hari_ke: input.hari_ke,
+    jam: input.jam ?? null,
     category_ids: input.category_ids ?? [],
     photo_paths: input.photo_paths ?? [],
     created_at: nowIso(),
@@ -153,8 +160,8 @@ export async function addEntry(userId: string, input: EntryInput): Promise<Logbo
     dirty: true,
   };
   await d.execute(
-    `INSERT INTO logbook_entries (id, user_id, kegiatan, tanggal, minggu, hari_ke, category_ids, photo_paths, created_at, updated_at, deleted, dirty)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 0, 1)`,
+    `INSERT INTO logbook_entries (id, user_id, kegiatan, tanggal, minggu, hari_ke, jam, category_ids, photo_paths, created_at, updated_at, deleted, dirty)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 0, 1)`,
     [
       entry.id,
       entry.user_id,
@@ -162,6 +169,7 @@ export async function addEntry(userId: string, input: EntryInput): Promise<Logbo
       entry.tanggal,
       entry.minggu,
       entry.hari_ke,
+      entry.jam,
       JSON.stringify(entry.category_ids),
       JSON.stringify(entry.photo_paths),
       entry.created_at,
@@ -184,18 +192,19 @@ export async function updateEntry(
   const tanggal = patch.tanggal ?? existing.tanggal;
   const minggu = patch.minggu ?? existing.minggu;
   const hari_ke = patch.hari_ke !== undefined ? patch.hari_ke : existing.hari_ke;
+  const jam = patch.jam !== undefined ? patch.jam : existing.jam;
   const category_ids = patch.category_ids ?? existing.category_ids;
   const photo_paths = patch.photo_paths ?? existing.photo_paths;
   const updated_at = nowIso();
 
   await d.execute(
     `UPDATE logbook_entries
-     SET kegiatan = $1, tanggal = $2, minggu = $3, hari_ke = $4, category_ids = $5, photo_paths = $6, updated_at = $7, dirty = 1
-     WHERE id = $8 AND user_id = $9`,
-    [kegiatan, tanggal, minggu, hari_ke, JSON.stringify(category_ids), JSON.stringify(photo_paths), updated_at, id, userId]
+     SET kegiatan = $1, tanggal = $2, minggu = $3, hari_ke = $4, jam = $5, category_ids = $6, photo_paths = $7, updated_at = $8, dirty = 1
+     WHERE id = $9 AND user_id = $10`,
+    [kegiatan, tanggal, minggu, hari_ke, jam, JSON.stringify(category_ids), JSON.stringify(photo_paths), updated_at, id, userId]
   );
 
-  return { ...existing, kegiatan, tanggal, minggu, hari_ke, category_ids, photo_paths, updated_at, dirty: true };
+  return { ...existing, kegiatan, tanggal, minggu, hari_ke, jam, category_ids, photo_paths, updated_at, dirty: true };
 }
 
 export async function deleteEntry(id: string, userId: string): Promise<void> {
@@ -230,13 +239,14 @@ export async function upsertLocal(entry: LogbookEntry): Promise<void> {
     return;
   }
   await d.execute(
-    `INSERT INTO logbook_entries (id, user_id, kegiatan, tanggal, minggu, hari_ke, category_ids, photo_paths, created_at, updated_at, deleted, dirty)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 0, 0)
+    `INSERT INTO logbook_entries (id, user_id, kegiatan, tanggal, minggu, hari_ke, jam, category_ids, photo_paths, created_at, updated_at, deleted, dirty)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 0, 0)
      ON CONFLICT (id) DO UPDATE SET
        kegiatan = excluded.kegiatan,
        tanggal = excluded.tanggal,
        minggu = excluded.minggu,
        hari_ke = excluded.hari_ke,
+       jam = excluded.jam,
        category_ids = excluded.category_ids,
        photo_paths = excluded.photo_paths,
        created_at = excluded.created_at,
@@ -250,6 +260,7 @@ export async function upsertLocal(entry: LogbookEntry): Promise<void> {
       entry.tanggal,
       entry.minggu,
       entry.hari_ke,
+      entry.jam,
       JSON.stringify(entry.category_ids ?? []),
       JSON.stringify(entry.photo_paths ?? []),
       entry.created_at,
@@ -372,13 +383,14 @@ export async function importAll(data: BackupData, userId: string): Promise<void>
   for (const e of data.entries ?? []) {
     if (!e || typeof e.id !== "string") continue;
     await d.execute(
-      `INSERT INTO logbook_entries (id, user_id, kegiatan, tanggal, minggu, hari_ke, category_ids, photo_paths, created_at, updated_at, deleted, dirty)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 0, 1)
+      `INSERT INTO logbook_entries (id, user_id, kegiatan, tanggal, minggu, hari_ke, jam, category_ids, photo_paths, created_at, updated_at, deleted, dirty)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 0, 1)
        ON CONFLICT (id) DO UPDATE SET
          kegiatan = excluded.kegiatan,
          tanggal = excluded.tanggal,
          minggu = excluded.minggu,
          hari_ke = excluded.hari_ke,
+         jam = excluded.jam,
          category_ids = excluded.category_ids,
          photo_paths = excluded.photo_paths,
          created_at = excluded.created_at,
@@ -392,6 +404,7 @@ export async function importAll(data: BackupData, userId: string): Promise<void>
         e.tanggal ?? "",
         e.minggu ?? 1,
         e.hari_ke ?? null,
+        e.jam ?? null,
         JSON.stringify(e.category_ids ?? []),
         JSON.stringify(e.photo_paths ?? []),
         e.created_at ?? nowIso(),

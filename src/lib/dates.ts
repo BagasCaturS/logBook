@@ -123,3 +123,20 @@ export function computeMinggu(tanggal: string, startDate: string | null | undefi
   if (diff < 0) return { minggu: null, hariKe: null };
   return { minggu: Math.floor(diff / 7) + 1, hariKe: diff + 1 };
 }
+
+const HH_MM = /^([01]\d|2[0-3]):([0-5]\d)$/;
+
+/**
+ * Whole hours elapsed since `startHm` ("HH:MM") on the same day as `now`,
+ * floored and clamped to >= 0. Returns null when the format is invalid.
+ * E.g. now 15:23, start "11:00" → 4.
+ */
+export function hoursElapsed(now: Date, startHm: string): number | null {
+  const m = HH_MM.exec(startHm);
+  if (!m) return null;
+  const start = new Date(now);
+  start.setHours(Number(m[1]), Number(m[2]), 0, 0);
+  const ms = now.getTime() - start.getTime();
+  if (ms <= 0) return 0;
+  return Math.floor(ms / 3_600_000);
+}

@@ -378,6 +378,8 @@ export default function App() {
           categories={categories}
           entries={entries}
           userId={session.userId}
+          hourStart={settings.hourStart}
+          hourLabel={settings.hourLabel}
           updateInfo={updateInfo}
           updateState={updateState}
           updateError={updateError}
@@ -391,6 +393,11 @@ export default function App() {
           }}
           onSaveStartDate={(d) => {
             const next = { ...settingsRef.current, startDate: d };
+            saveSettings(next);
+            setSettings(next);
+          }}
+          onSaveHours={(start, label) => {
+            const next = { ...settingsRef.current, hourStart: start, hourLabel: label };
             saveSettings(next);
             setSettings(next);
           }}
@@ -431,6 +438,8 @@ export default function App() {
           )}
           <EntryForm
             startDate={settings.startDate}
+            hourStart={settings.hourStart}
+            hourLabel={settings.hourLabel}
             editing={editing}
             initialDate={formDate}
             categories={categories}
@@ -451,6 +460,7 @@ export default function App() {
             leavingId={leavingId}
             supabaseUrl={settings.supabaseUrl}
             lang={lang}
+            hourLabel={settings.hourLabel}
             onAdd={(date) => {
               setEditing(null);
               setFormDate(date);
@@ -469,6 +479,7 @@ export default function App() {
             leavingId={leavingId}
             supabaseUrl={settings.supabaseUrl}
             lang={lang}
+            hourLabel={settings.hourLabel}
             onEdit={(e) => {
               setEditing(e);
               window.scrollTo({ top: 0, behavior: "smooth" });

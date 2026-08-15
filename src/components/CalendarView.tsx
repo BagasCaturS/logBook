@@ -30,6 +30,7 @@ interface Props {
   leavingId?: string | null;
   supabaseUrl: string;
   lang: Lang;
+  hourLabel: string;
   onAdd: (date: string) => void;
   onEdit: (e: LogbookEntry) => void;
   onDelete: (e: LogbookEntry) => void;
@@ -43,6 +44,7 @@ export default function CalendarView({
   leavingId,
   supabaseUrl,
   lang,
+  hourLabel,
   onAdd,
   onEdit,
   onDelete,
@@ -175,6 +177,9 @@ export default function CalendarView({
                       <span className="badge">{t(lang, "list.mingguBadge", { minggu: e.minggu })}</span>
                       {e.hari_ke !== null && (
                         <span className="badge violet">{t(lang, "list.hariBadge", { hari: e.hari_ke })}</span>
+                      )}
+                      {e.jam !== null && (
+                        <span className="badge amber">{hourLabel} - {e.jam}</span>
                       )}
                       <span className="spacer" />
                       <button

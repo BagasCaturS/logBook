@@ -7,6 +7,7 @@ export interface LogbookEntry {
   tanggal: string; // YYYY-MM-DD (local date)
   minggu: number;
   hari_ke: number | null;
+  jam: number | null;
   category_ids: string[];
   photo_paths: string[];
   created_at: string; // ISO UTC
@@ -20,6 +21,7 @@ export interface EntryInput {
   tanggal: string;
   minggu: number;
   hari_ke: number | null;
+  jam: number | null;
   category_ids: string[];
   photo_paths: string[];
 }
@@ -42,6 +44,8 @@ export interface AppSettings {
   lastSyncAt: string | null;
   theme: string;
   lang: Lang;
+  hourStart: string; // HH:MM
+  hourLabel: string;
 }
 
 export type SyncState = "online" | "offline" | "syncing" | "error";
@@ -59,6 +63,7 @@ export interface RemoteEntry {
   tanggal: string;
   minggu: number;
   hari_ke: number | null;
+  jam: number | null;
   category_ids?: string | string[] | null;
   photo_paths?: string | string[] | null;
   created_at: string;

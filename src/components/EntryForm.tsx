@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Category, EntryInput, LogbookEntry } from "../lib/types";
-import { computeMinggu, todayIso } from "../lib/dates";
+import { computeMinggu, hoursElapsed, todayIso } from "../lib/dates";
 import { t, type Lang } from "../lib/i18n";
 import { MAX_PHOTOS, isBigFile, photoUrl, type PhotoOps } from "../lib/photos";
 import { errMessage } from "../lib/sync";
@@ -9,6 +9,8 @@ import RichEditor from "./RichEditor";
 
 interface Props {
   startDate: string;
+  hourStart: string;
+  hourLabel: string;
   editing: LogbookEntry | null;
   initialDate?: string | null;
   categories: Category[];
@@ -21,6 +23,8 @@ interface Props {
 
 export default function EntryForm({
   startDate,
+  hourStart,
+  hourLabel,
   editing,
   initialDate,
   categories,
@@ -33,6 +37,7 @@ export default function EntryForm({
   const [kegiatan, setKegiatan] = useState("");
   const [tanggal, setTanggal] = useState(todayIso());
   const [minggu, setMinggu] = useState("");
+  const [jam, setJam] = useState("");
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [showNewCategory, setShowNewCategory] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
@@ -50,6 +55,7 @@ export default function EntryForm({
       setKegiatan(editing.kegiatan);
       setTanggal(editing.tanggal);
       setMinggu(String(editing.minggu));
+      setJam(editing.jam !== null ? String(editing.jam) : "");
       setSelectedCategories(editing.category_ids ?? []);
       setKeptPaths(editing.photo_paths ?? []);
     } else {
@@ -58,6 +64,7 @@ export default function EntryForm({
       setTanggal(d);
       const a = computeMinggu(d, startDate);
       setMinggu(a.minggu !== null ? String(a.minggu) : "");
+      setJam(d === todayIso() ? String(hoursElapsed(new Date(), hourStart) ?? "") : "");
       setSelectedCategories([]);
       setKeptPaths([]);
     }
@@ -67,7 +74,7 @@ export default function EntryForm({
     setNewFiles([]);
     setBigFileNote(false);
     setError(null);
-  }, [editing, initialDate, startDate]);
+  }, [editing, initialDate, startDate, hourStart]);
 
   useEffect(() => {
     if (savedPhase === "show") {
@@ -87,6 +94,7 @@ export default function EntryForm({
     setTanggal(v);
     const a = computeMinggu(v, startDate);
     if (a.minggu !== null) setMinggu(String(a.minggu));
+    if (v === todayIso()) setJam(String(hoursElapsed(new Date(), hourStart) ?? ""));
   }
 
   function toggleCategory(id: string) {
@@ -157,6 +165,11 @@ export default function EntryForm({
       setError(t(lang, "form.errMinggu"));
       return;
     }
+    const j = jam.trim() === "" ? null : Number(jam);
+    if (j !== null && (!Number.isInteger(j) || j < 0)) {
+      setError(t(lang, "form.errJam"));
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
@@ -166,6 +179,7 @@ export default function EntryForm({
           tanggal,
           minggu: m,
           hari_ke: auto.hariKe ?? null,
+          jam: j,
           category_ids: selectedCategories,
           photo_paths: keptPaths,
         },
@@ -210,7 +224,18 @@ export default function EntryForm({
             onChange={(e) => setMinggu(e.target.value)}
           />
         </label>
+        <label>
+          {hourLabel}
+          <input
+            type="number"
+            min={0}
+            step={1}
+            value={jam}
+            onChange={(e) => setJam(e.target.value)}
+          />
+        </label>
       </div>
+      <p className="hint">{t(lang, "form.jamHint")}</p>
       <div className="cat-picker">
         <span className="cat-label">{t(lang, "form.kategori")}</span>
         {categories.length === 0 ? (
@@ -244,7 +269,7 @@ export default function EntryForm({
               {t(lang, "form.add")}
             </button>
             <button
-              className="secondary"
+              className="danger-soft"
               onClick={() => {
                 setShowNewCategory(false);
                 setNewCategoryName("");
@@ -337,7 +362,7 @@ export default function EntryForm({
               ? t(lang, "form.saveChanges")
               : t(lang, "form.add")}
         </button>
-        <button className="secondary" onClick={onCancel}>
+        <button className="danger-soft" onClick={onCancel}>
           {t(lang, "form.cancel")}
         </button>
       </div>
