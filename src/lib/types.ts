@@ -37,8 +37,28 @@ export interface Category {
   dirty: boolean;
 }
 
-export interface AppSettings {
-  supabaseUrl: string;
+export interface DailyNote {
+  id: string; // `note-<tanggal>` — deterministic agar LWW antar device aman
+  user_id: string;
+  tanggal: string; // YYYY-MM-DD (local date)
+  isi: string; // plain text
+  created_at: string; // ISO UTC
+  updated_at: string; // ISO UTC
+  deleted: boolean;
+  dirty: boolean;
+}
+
+export interface RemoteDailyNote {
+  id: string;
+  user_id: string;
+  tanggal: string;
+  isi: string;
+  created_at: string;
+  updated_at: string;
+  deleted: boolean;
+}
+
+export interface AppSettings {  supabaseUrl: string;
   supabaseAnonKey: string;
   startDate: string; // YYYY-MM-DD or '' when not set
   lastSyncAt: string | null;

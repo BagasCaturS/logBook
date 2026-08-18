@@ -205,6 +205,15 @@ const dict: Record<string, { id: string; en: string }> = {
   "settings.sectionAccount": { id: "Akun", en: "Account" },
   "settings.categoryCount": { id: "{n} kategori", en: "{n} categories" },
 
+  // daily notes
+  "note.title": { id: "Catatan harian", en: "Daily note" },
+  "note.placeholder": {
+    id: "Refleksi, kendala, atau hal yang dipelajari hari ini…",
+    en: "Reflection, blockers, or things learned today…",
+  },
+  "note.save": { id: "Simpan catatan", en: "Save note" },
+  "note.saved": { id: "Tersimpan", en: "Saved" },
+
   // export PDF
   "export.title": { id: "Ekspor PDF", en: "Export PDF" },
   "export.hint": {

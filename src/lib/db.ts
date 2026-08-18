@@ -1,6 +1,7 @@
 import Database from "@tauri-apps/plugin-sql";
-import type { Category, EntryInput, LogbookEntry } from "./types";
+import type { Category, DailyNote, EntryInput, LogbookEntry } from "./types";
 import { nowIso } from "./dates";
+import { noteIdFor } from "./notes";
 
 interface Row {
   id: string;
@@ -23,6 +24,17 @@ interface CategoryRow {
   user_id: string;
   name: string;
   color: string;
+  created_at: string;
+  updated_at: string;
+  deleted: number;
+  dirty: number;
+}
+
+interface NoteRow {
+  id: string;
+  user_id: string;
+  tanggal: string;
+  isi: string;
   created_at: string;
   updated_at: string;
   deleted: number;
@@ -79,6 +91,19 @@ export async function ensureDb(): Promise<Database> {
     )
   `);
   await db.execute("CREATE INDEX IF NOT EXISTS idx_categories_user ON categories (user_id)");
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS daily_notes (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      tanggal TEXT NOT NULL,
+      isi TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      deleted INTEGER NOT NULL DEFAULT 0,
+      dirty INTEGER NOT NULL DEFAULT 0
+    )
+  `);
+  await db.execute("CREATE INDEX IF NOT EXISTS idx_daily_notes_user_tanggal ON daily_notes (user_id, tanggal DESC)");
   return db;
 }
 
@@ -368,6 +393,124 @@ export async function upsertCategoryLocal(cat: Category): Promise<void> {
   );
 }
 
+// ---------- Daily notes ----------
+
+function mapNote(r: NoteRow): DailyNote {
+  return {
+    id: r.id,
+    user_id: r.user_id,
+    tanggal: r.tanggal.slice(0, 10),
+    isi: r.isi,
+    created_at: r.created_at,
+    updated_at: r.updated_at,
+    deleted: r.deleted === 1,
+    dirty: r.dirty === 1,
+  };
+}
+
+export async function listDailyNotes(userId: string): Promise<DailyNote[]> {
+  const d = await ensureDb();
+  const rows = await d.select<NoteRow[]>(
+    `SELECT * FROM daily_notes WHERE user_id = $1 AND deleted = 0
+     ORDER BY tanggal DESC`,
+    [userId]
+  );
+  return rows.map(mapNote);
+}
+
+export async function getDailyNote(id: string, userId: string): Promise<DailyNote | null> {
+  const d = await ensureDb();
+  const rows = await d.select<NoteRow[]>(
+    "SELECT * FROM daily_notes WHERE id = $1 AND user_id = $2",
+    [id, userId]
+  );
+  return rows.length ? mapNote(rows[0]) : null;
+}
+
+/** Simpan catatan harian; isi kosong = hapus (soft delete agar tersinkron). */
+export async function saveDailyNote(
+  userId: string,
+  tanggal: string,
+  isi: string
+): Promise<DailyNote | null> {
+  const d = await ensureDb();
+  const id = noteIdFor(tanggal);
+  const text = isi.trim();
+  const existing = await getDailyNote(id, userId);
+  const now = nowIso();
+
+  if (text === "") {
+    if (existing) {
+      await d.execute(
+        "UPDATE daily_notes SET deleted = 1, dirty = 1, updated_at = $1 WHERE id = $2 AND user_id = $3",
+        [now, id, userId]
+      );
+    }
+    return null;
+  }
+
+  if (existing) {
+    await d.execute(
+      "UPDATE daily_notes SET isi = $1, updated_at = $2, dirty = 1, deleted = 0 WHERE id = $3 AND user_id = $4",
+      [text, now, id, userId]
+    );
+    return { ...existing, isi: text, updated_at: now, dirty: true, deleted: false };
+  }
+
+  const note: DailyNote = {
+    id,
+    user_id: userId,
+    tanggal,
+    isi: text,
+    created_at: now,
+    updated_at: now,
+    deleted: false,
+    dirty: true,
+  };
+  await d.execute(
+    `INSERT INTO daily_notes (id, user_id, tanggal, isi, created_at, updated_at, deleted, dirty)
+     VALUES ($1, $2, $3, $4, $5, $6, 0, 1)`,
+    [note.id, note.user_id, note.tanggal, note.isi, note.created_at, note.updated_at]
+  );
+  return note;
+}
+
+export async function getDirtyNotes(userId: string): Promise<DailyNote[]> {
+  const d = await ensureDb();
+  const rows = await d.select<NoteRow[]>(
+    "SELECT * FROM daily_notes WHERE user_id = $1 AND dirty = 1",
+    [userId]
+  );
+  return rows.map(mapNote);
+}
+
+export async function markNoteClean(id: string): Promise<void> {
+  const d = await ensureDb();
+  await d.execute("UPDATE daily_notes SET dirty = 0 WHERE id = $1", [id]);
+}
+
+export async function upsertNoteLocal(note: DailyNote): Promise<void> {
+  const d = await ensureDb();
+  if (note.deleted) {
+    await d.execute("DELETE FROM daily_notes WHERE id = $1 AND user_id = $2", [
+      note.id,
+      note.user_id,
+    ]);
+    return;
+  }
+  await d.execute(
+    `INSERT INTO daily_notes (id, user_id, tanggal, isi, created_at, updated_at, deleted, dirty)
+     VALUES ($1, $2, $3, $4, $5, $6, 0, 0)
+     ON CONFLICT (id) DO UPDATE SET
+       isi = excluded.isi,
+       created_at = excluded.created_at,
+       updated_at = excluded.updated_at,
+       deleted = 0,
+       dirty = 0`,
+    [note.id, note.user_id, note.tanggal, note.isi, note.created_at, note.updated_at]
+  );
+}
+
 // ---------- Backup / restore ----------
 
 export interface BackupData {
@@ -375,6 +518,7 @@ export interface BackupData {
   exportedAt?: string;
   entries: LogbookEntry[];
   categories: Category[];
+  notes?: DailyNote[];
 }
 
 /** Import data dari backup (merge by id). Semua di-mark dirty agar disinkronkan ulang. */
@@ -425,6 +569,20 @@ export async function importAll(data: BackupData, userId: string): Promise<void>
          deleted = 0,
          dirty = 1`,
       [c.id, userId, c.name ?? "", c.color ?? "#6366f1", c.created_at ?? nowIso(), c.updated_at ?? nowIso()]
+    );
+  }
+  for (const n of data.notes ?? []) {
+    if (!n || typeof n.id !== "string") continue;
+    await d.execute(
+      `INSERT INTO daily_notes (id, user_id, tanggal, isi, created_at, updated_at, deleted, dirty)
+       VALUES ($1, $2, $3, $4, $5, $6, 0, 1)
+       ON CONFLICT (id) DO UPDATE SET
+         isi = excluded.isi,
+         created_at = excluded.created_at,
+         updated_at = excluded.updated_at,
+         deleted = 0,
+         dirty = 1`,
+      [n.id, userId, n.tanggal ?? "", n.isi ?? "", n.created_at ?? nowIso(), n.updated_at ?? nowIso()]
     );
   }
 }

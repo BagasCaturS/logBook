@@ -13,7 +13,9 @@ import {
   deleteCategory,
   deleteEntry,
   listCategories,
+  listDailyNotes,
   listEntries,
+  saveDailyNote,
   updateEntry,
 } from "./lib/db";
 import { formatDateTime } from "./lib/dates";
@@ -25,7 +27,7 @@ import { loadSettings, saveSettings } from "./lib/settings";
 import { syncNow } from "./lib/sync";
 import { DEFAULT_THEME } from "./lib/themes";
 import { checkForUpdate, downloadAndInstall } from "./lib/update";
-import type { AppSettings, Category, EntryInput, LogbookEntry, SyncStatus } from "./lib/types";
+import type { AppSettings, Category, DailyNote, EntryInput, LogbookEntry, SyncStatus } from "./lib/types";
 import type { DownloadProgress, UpdateInfo } from "./lib/update";
 
 const SYNC_INTERVAL_MS = 30_000;
@@ -47,6 +49,7 @@ export default function App() {
   const [session, setSession] = useState<{ userId: string; email: string | undefined } | null>(null);
   const [entries, setEntries] = useState<LogbookEntry[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [notes, setNotes] = useState<DailyNote[]>([]);
   const [syncStatus, setSyncStatus] = useState<SyncStatus>({
     state: "offline",
     lastSyncAt: initialSettings.lastSyncAt,
@@ -80,6 +83,10 @@ export default function App() {
 
   const refreshCategories = useCallback(async (userId: string) => {
     setCategories(await listCategories(userId));
+  }, []);
+
+  const refreshNotes = useCallback(async (userId: string) => {
+    setNotes(await listDailyNotes(userId));
   }, []);
 
   const runSync = useCallback(async () => {
@@ -145,10 +152,11 @@ export default function App() {
     }
     void refreshEntries(session.userId);
     void refreshCategories(session.userId);
+    void refreshNotes(session.userId);
     void runSync();
     const interval = window.setInterval(() => void runSync(), SYNC_INTERVAL_MS);
     return () => window.clearInterval(interval);
-  }, [session?.userId, refreshEntries, refreshCategories, runSync]);
+  }, [session?.userId, refreshEntries, refreshCategories, refreshNotes, runSync]);
 
   async function handleSaveSetup(url: string, key: string) {
     const next: AppSettings = { ...settingsRef.current, supabaseUrl: url, supabaseAnonKey: key };
@@ -213,6 +221,13 @@ export default function App() {
     await refreshCategories(session.userId);
     queueSync();
     return cat;
+  }
+
+  async function handleSaveNote(tanggal: string, isi: string) {
+    if (!session) return;
+    await saveDailyNote(session.userId, tanggal, isi);
+    await refreshNotes(session.userId);
+    queueSync();
   }
 
   function closeDialog() {
@@ -347,6 +362,7 @@ export default function App() {
               if (session) {
                 await refreshEntries(session.userId);
                 await refreshCategories(session.userId);
+                await refreshNotes(session.userId);
               }
             }}
           >
@@ -377,6 +393,7 @@ export default function App() {
           appVersion={appVersion}
           categories={categories}
           entries={entries}
+          notes={notes}
           userId={session.userId}
           hourStart={settings.hourStart}
           hourLabel={settings.hourLabel}
@@ -389,6 +406,7 @@ export default function App() {
           onRestored={() => {
             void refreshEntries(session.userId);
             void refreshCategories(session.userId);
+            void refreshNotes(session.userId);
             queueSync();
           }}
           onSaveStartDate={(d) => {
@@ -452,15 +470,17 @@ export default function App() {
               setFormDate(null);
             }}
           />
-          
+
           <CalendarView
             entries={entries}
             categories={categories}
+            notes={notes}
             startDate={settings.startDate}
             leavingId={leavingId}
             supabaseUrl={settings.supabaseUrl}
             lang={lang}
             hourLabel={settings.hourLabel}
+            onSaveNote={(tanggal, isi) => void handleSaveNote(tanggal, isi)}
             onAdd={(date) => {
               setEditing(null);
               setFormDate(date);

@@ -2,14 +2,18 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { nowIso } from "./dates";
 import {
   getCategory,
+  getDailyNote,
   getDirtyCategories,
   getDirtyEntries,
+  getDirtyNotes,
   getEntry,
   listEntries,
   markCategoryClean,
   markClean,
+  markNoteClean,
   upsertCategoryLocal,
   upsertLocal,
+  upsertNoteLocal,
 } from "./db";
 import { cleanupOrphanPhotos, deletePhotos } from "./photos";
 import { saveSettings } from "./settings";
@@ -17,8 +21,10 @@ import { localNewerThan, parseTs } from "./syncLogic";
 import type {
   AppSettings,
   Category,
+  DailyNote,
   LogbookEntry,
   RemoteCategory,
+  RemoteDailyNote,
   RemoteEntry,
   SyncStatus,
 } from "./types";
@@ -60,6 +66,19 @@ function toLocalCategory(r: RemoteCategory, userId: string): Category {
     user_id: userId,
     name: r.name,
     color: r.color,
+    created_at: r.created_at,
+    updated_at: r.updated_at,
+    deleted: !!r.deleted,
+    dirty: false,
+  };
+}
+
+function toLocalNote(r: RemoteDailyNote, userId: string): DailyNote {
+  return {
+    id: r.id,
+    user_id: userId,
+    tanggal: (r.tanggal ?? "").slice(0, 10),
+    isi: r.isi ?? "",
     created_at: r.created_at,
     updated_at: r.updated_at,
     deleted: !!r.deleted,
@@ -240,6 +259,29 @@ const categoryAdapter: TableAdapter<Category> = {
   fullPull: true,
 };
 
+const dailyNoteAdapter: TableAdapter<DailyNote> = {
+  selectColumns: "*",
+  getLocal: (id, userId) => getDailyNote(id, userId),
+  upsertLocal: upsertNoteLocal,
+  markClean: markNoteClean,
+  payload: (n) => ({
+    id: n.id,
+    user_id: n.user_id,
+    tanggal: n.tanggal,
+    isi: n.isi,
+    created_at: n.created_at,
+    updated_at: n.updated_at,
+    // 1/0 works for both BOOLEAN and INTEGER columns in PostgreSQL
+    deleted: n.deleted ? 1 : 0,
+  }),
+  fromRemote: (r, userId) => toLocalNote(r as unknown as RemoteDailyNote, userId),
+  touchedAt: (n) => n.updated_at,
+  idOf: (n) => n.id,
+  // satu catatan per tanggal (id deterministic): pull penuh agar catatan
+  // yang dibuat di perangkat lain selalu terambil, termasuk lintas versi.
+  fullPull: true,
+};
+
 /**
  * One sync cycle: push local dirty rows, then pull remote changes since the
  * last watermark (full table for fullPull adapters). Last-write-wins on
@@ -262,12 +304,13 @@ export async function syncNow(
 
   try {
     const watermark = settings.lastSyncAt ?? "1970-01-01T00:00:00.000Z";
-    const [entryTs, catTs] = await Promise.all([
+    const [entryTs, catTs, noteTs] = await Promise.all([
       syncTable(client, "logbook_entries", userId, watermark, getDirtyEntries, entryAdapter),
       syncTable(client, "categories", userId, watermark, getDirtyCategories, categoryAdapter),
+      syncTable(client, "daily_notes", userId, watermark, getDirtyNotes, dailyNoteAdapter),
     ]);
 
-    const maxRemoteTs = Math.max(entryTs, catTs);
+    const maxRemoteTs = Math.max(entryTs, catTs, noteTs);
     const newWatermark = maxRemoteTs > 0 ? new Date(maxRemoteTs).toISOString() : settings.lastSyncAt;
     const nextSettings: AppSettings = { ...settings, lastSyncAt: newWatermark };
     saveSettings(nextSettings);

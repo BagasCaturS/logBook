@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import type { Category, LogbookEntry } from "../lib/types";
+import type { Category, DailyNote, LogbookEntry } from "../lib/types";
 import {
   computeMinggu,
   formatMonthYear,
@@ -12,6 +12,7 @@ import { t, type Lang } from "../lib/i18n";
 import { plainTextFromHtml, renderEntryText } from "../lib/richtext";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { IconChevronLeft, IconChevronRight, IconPencil, IconPlus, IconTrash } from "./icons";
+import NoteEditor from "./NoteEditor";
 import PhotoThumbs from "./PhotoThumbs";
 
 function handleContentClick(e: React.MouseEvent<HTMLDivElement>) {
@@ -26,6 +27,7 @@ function handleContentClick(e: React.MouseEvent<HTMLDivElement>) {
 interface Props {
   entries: LogbookEntry[];
   categories: Category[];
+  notes: DailyNote[];
   startDate: string;
   leavingId?: string | null;
   supabaseUrl: string;
@@ -35,11 +37,13 @@ interface Props {
   onEdit: (e: LogbookEntry) => void;
   onDelete: (e: LogbookEntry) => void;
   onOpenPhoto: (url: string) => void;
+  onSaveNote: (tanggal: string, isi: string) => void;
 }
 
 export default function CalendarView({
   entries,
   categories,
+  notes,
   startDate,
   leavingId,
   supabaseUrl,
@@ -49,6 +53,7 @@ export default function CalendarView({
   onEdit,
   onDelete,
   onOpenPhoto,
+  onSaveNote,
 }: Props) {
   const now = todayIso();
   const [cursor, setCursor] = useState(() => {
@@ -74,7 +79,13 @@ export default function CalendarView({
     [categories]
   );
 
+  const noteByDate = useMemo(
+    () => new Map(notes.map((n) => [n.tanggal, n])),
+    [notes]
+  );
+
   const selectedEntries = byDate.get(selected) ?? [];
+  const selectedNote = noteByDate.get(selected) ?? null;
   const mingguInfo = useMemo(
     () => computeMinggu(selected, startDate),
     [selected, startDate]
@@ -121,11 +132,13 @@ export default function CalendarView({
         {cells.map((cell, i) => {
           const dayEntries = byDate.get(cell.date);
           const count = dayEntries?.length ?? 0;
+          const hasNote = noteByDate.has(cell.date);
           const classes = ["cal-cell"];
           if (!cell.inMonth) classes.push("outside");
           if (cell.date === now) classes.push("today");
           if (cell.date === selected) classes.push("selected");
           if (count > 0) classes.push("has");
+          if (hasNote) classes.push("has-note");
           return (
             <button
               key={cell.date}
@@ -145,6 +158,7 @@ export default function CalendarView({
                   {count > 9 ? "9+" : count}
                 </span>
               )}
+              {hasNote && <span className="cal-note-dot" />}
             </button>
           );
         })}
@@ -223,6 +237,12 @@ export default function CalendarView({
             ))}
           </ul>
         )}
+        <NoteEditor
+          tanggal={selected}
+          note={selectedNote}
+          lang={lang}
+          onSave={onSaveNote}
+        />
       </div>
     </section>
   );

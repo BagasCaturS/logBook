@@ -1295,6 +1295,53 @@ li.removing .entry-card {
   background: var(--accent);
 }
 
+.cal-note-dot {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--primary);
+  box-shadow: 0 0 0 2px var(--surface);
+}
+
+.cal-cell.has-note {
+  position: relative;
+}
+
+.note-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.note-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.note-head h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.note-saved {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent);
+  animation: riseIn 180ms ease-out both;
+}
+
+.note-input {
+  width: 100%;
+  line-height: 1.5;
+}
+
 .day-panel {
   display: flex;
   flex-direction: column;

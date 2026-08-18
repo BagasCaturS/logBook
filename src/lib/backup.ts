@@ -1,13 +1,14 @@
 import { open, save, type DialogFilter } from "@tauri-apps/plugin-dialog";
 import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
 import type { BackupData } from "./db";
-import type { Category, LogbookEntry } from "./types";
+import type { Category, DailyNote, LogbookEntry } from "./types";
 
 const jsonFilter: DialogFilter = { name: "JSON", extensions: ["json"] };
 
 export function buildBackupJson(
   entries: LogbookEntry[],
   categories: Category[],
+  notes: DailyNote[],
   appVersion: string
 ): string {
   const data: BackupData = {
@@ -15,6 +16,7 @@ export function buildBackupJson(
     exportedAt: new Date().toISOString(),
     entries,
     categories,
+    notes,
   };
   return JSON.stringify(data, null, 2);
 }
@@ -58,6 +60,7 @@ function validateBackup(v: unknown): BackupData | null {
     exportedAt: typeof obj.exportedAt === "string" ? obj.exportedAt : undefined,
     entries: obj.entries.filter(isEntry),
     categories: obj.categories.filter(isCategory),
+    notes: Array.isArray(obj.notes) ? obj.notes.filter(isNote) : undefined,
   };
 }
 
@@ -69,6 +72,12 @@ function isEntry(v: unknown): v is LogbookEntry {
     typeof e.kegiatan === "string" &&
     typeof e.tanggal === "string"
   );
+}
+
+function isNote(v: unknown): v is DailyNote {
+  if (typeof v !== "object" || v === null) return false;
+  const n = v as Record<string, unknown>;
+  return typeof n.id === "string" && typeof n.tanggal === "string" && typeof n.isi === "string";
 }
 
 function isCategory(v: unknown): v is Category {

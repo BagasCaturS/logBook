@@ -4,7 +4,7 @@ import { THEMES } from "../lib/themes";
 import { LANGS, t, type Lang } from "../lib/i18n";
 import { DEFAULT_HOUR_LABEL } from "../lib/settings";
 import { IconRefresh, IconLogout } from "./icons";
-import type { Category, LogbookEntry } from "../lib/types";
+import type { Category, DailyNote, LogbookEntry } from "../lib/types";
 import type { DownloadProgress, UpdateInfo } from "../lib/update";
 import { buildPdf, savePdf } from "../lib/exportPdf";
 import { buildBackupJson, pickBackupFile, saveBackupFile } from "../lib/backup";
@@ -22,6 +22,7 @@ interface Props {
   appVersion: string;
   categories: Category[];
   entries: LogbookEntry[];
+  notes: DailyNote[];
   userId: string;
   hourStart: string;
   hourLabel: string;
@@ -52,6 +53,7 @@ export default function SettingsView({
   appVersion,
   categories,
   entries,
+  notes,
   userId,
   hourStart,
   hourLabel,
@@ -157,7 +159,7 @@ export default function SettingsView({
     setNote(null);
     setNoteErr(null);
     try {
-      const json = buildBackupJson(entries, categories, appVersion);
+      const json = buildBackupJson(entries, categories, notes, appVersion);
       const path = await saveBackupFile(json, `logbook-backup-${todayIso()}.json`);
       if (path) setNote(t(lang, "backup.saved"));
     } catch (e) {
