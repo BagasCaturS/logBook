@@ -13,6 +13,7 @@ import {
 } from "./db";
 import { cleanupOrphanPhotos, deletePhotos } from "./photos";
 import { saveSettings } from "./settings";
+import { localNewerThan, parseTs } from "./syncLogic";
 import type {
   AppSettings,
   Category,
@@ -21,11 +22,6 @@ import type {
   RemoteEntry,
   SyncStatus,
 } from "./types";
-
-function ts(s: string): number {
-  const t = Date.parse(s);
-  return isNaN(t) ? 0 : t;
-}
 
 function parseIds(raw: string | string[] | null | undefined): string[] {
   if (Array.isArray(raw)) return raw.filter((x): x is string => typeof x === "string");
@@ -119,10 +115,10 @@ async function syncTable<TLocal>(
       existing.push(...((data as { id: string; updated_at: string }[]) ?? []));
     }
 
-    const remoteTs = new Map<string, number>(existing.map((r) => [r.id, ts(r.updated_at)]));
+    const remoteTs = new Map<string, number>(existing.map((r) => [r.id, parseTs(r.updated_at)]));
     const toPush = dirty.filter((e) => {
       const rt = remoteTs.get(adapter.idOf(e)) ?? 0;
-      return rt <= ts(adapter.touchedAt(e));
+      return rt <= parseTs(adapter.touchedAt(e));
     });
 
     if (toPush.length > 0) {
@@ -168,11 +164,15 @@ async function syncTable<TLocal>(
 
   let maxRemoteTs = 0;
   for (const r of rows) {
-    const updated = ts(String(r.updated_at ?? ""));
+    const updated = parseTs(String(r.updated_at ?? ""));
     maxRemoteTs = Math.max(maxRemoteTs, updated);
     const id = String(r.id);
     const local = await adapter.getLocal(id, userId);
-    if (local && ts(adapter.touchedAt(local)) >= updated) continue;
+    // Guard LWW: skip hanya jika lokal benar-benar LEBIH BARU. Baris dengan
+    // timestamp sama dengan remote (di-pull oleh versi klien lama yang belum
+    // mengenal kolom fitur baru) tetap di-re-pull, sehingga kolom baru
+    // (jam, category_ids, photo_paths, ...) ikut terisi setelah update.
+    if (local && localNewerThan(adapter.touchedAt(local), String(r.updated_at ?? ""))) continue;
     if (r.deleted && local && adapter.onRemoteDelete) {
       await adapter.onRemoteDelete(local, client);
     }
