@@ -41,6 +41,19 @@ interface NoteRow {
   dirty: number;
 }
 
+interface SettingsRow {
+  user_id: string;
+  start_date: string;
+  hour_start: string;
+  hour_label: string;
+  theme: string;
+  lang: string;
+  created_at: string;
+  updated_at: string;
+  deleted: number;
+  dirty: number;
+}
+
 let db: Database | null = null;
 
 export async function ensureDb(): Promise<Database> {
@@ -104,6 +117,20 @@ export async function ensureDb(): Promise<Database> {
     )
   `);
   await db.execute("CREATE INDEX IF NOT EXISTS idx_daily_notes_user_tanggal ON daily_notes (user_id, tanggal DESC)");
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS app_settings (
+      user_id TEXT PRIMARY KEY,
+      start_date TEXT NOT NULL DEFAULT '',
+      hour_start TEXT NOT NULL DEFAULT '11:00',
+      hour_label TEXT NOT NULL DEFAULT 'hour',
+      theme TEXT NOT NULL DEFAULT 'jurnal',
+      lang TEXT NOT NULL DEFAULT 'id',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      deleted INTEGER NOT NULL DEFAULT 0,
+      dirty INTEGER NOT NULL DEFAULT 0
+    )
+  `);
   return db;
 }
 
@@ -236,6 +263,15 @@ export async function deleteEntry(id: string, userId: string): Promise<void> {
   const d = await ensureDb();
   await d.execute(
     `UPDATE logbook_entries SET deleted = 1, dirty = 1, updated_at = $1 WHERE id = $2 AND user_id = $3`,
+    [nowIso(), id, userId]
+  );
+}
+
+/** Batalkan soft delete (untuk undo hapus). Updated_at baru => menang di LWW. */
+export async function restoreEntry(id: string, userId: string): Promise<void> {
+  const d = await ensureDb();
+  await d.execute(
+    `UPDATE logbook_entries SET deleted = 0, dirty = 1, updated_at = $1 WHERE id = $2 AND user_id = $3`,
     [nowIso(), id, userId]
   );
 }
@@ -508,6 +544,107 @@ export async function upsertNoteLocal(note: DailyNote): Promise<void> {
        deleted = 0,
        dirty = 0`,
     [note.id, note.user_id, note.tanggal, note.isi, note.created_at, note.updated_at]
+  );
+}
+
+// ---------- App settings (staging sync) ----------
+
+function mapSettingsRow(r: SettingsRow) {
+  return {
+    userId: r.user_id,
+    startDate: r.start_date,
+    hourStart: r.hour_start,
+    hourLabel: r.hour_label,
+    theme: r.theme,
+    lang: r.lang,
+    created_at: r.created_at,
+    updated_at: r.updated_at,
+    deleted: r.deleted === 1,
+    dirty: r.dirty === 1,
+  };
+}
+
+export interface SettingsSyncRow {
+  userId: string;
+  startDate: string;
+  hourStart: string;
+  hourLabel: string;
+  theme: string;
+  lang: string;
+  created_at: string;
+  updated_at: string;
+  deleted: boolean;
+  dirty: boolean;
+}
+
+export async function getSettingsRow(userId: string): Promise<SettingsSyncRow | null> {
+  const d = await ensureDb();
+  const rows = await d.select<SettingsRow[]>(
+    "SELECT * FROM app_settings WHERE user_id = $1",
+    [userId]
+  );
+  return rows.length ? mapSettingsRow(rows[0]) : null;
+}
+
+/** Tandai pengaturan berubah (dirty=1) agar ter-push pada sync berikutnya. */
+export async function markSettingsChanged(
+  userId: string,
+  fields: { startDate: string; hourStart: string; hourLabel: string; theme: string; lang: string }
+): Promise<void> {
+  const d = await ensureDb();
+  const now = nowIso();
+  const existing = await getSettingsRow(userId);
+  if (existing) {
+    await d.execute(
+      `UPDATE app_settings
+       SET start_date = $1, hour_start = $2, hour_label = $3, theme = $4, lang = $5,
+           updated_at = $6, dirty = 1, deleted = 0
+       WHERE user_id = $7`,
+      [fields.startDate, fields.hourStart, fields.hourLabel, fields.theme, fields.lang, now, userId]
+    );
+    return;
+  }
+  await d.execute(
+    `INSERT INTO app_settings (user_id, start_date, hour_start, hour_label, theme, lang, created_at, updated_at, deleted, dirty)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $7, 0, 1)`,
+    [userId, fields.startDate, fields.hourStart, fields.hourLabel, fields.theme, fields.lang, now]
+  );
+}
+
+export async function getDirtySettingsRows(userId: string): Promise<SettingsSyncRow[]> {
+  const d = await ensureDb();
+  const rows = await d.select<SettingsRow[]>(
+    "SELECT * FROM app_settings WHERE user_id = $1 AND dirty = 1",
+    [userId]
+  );
+  return rows.map(mapSettingsRow);
+}
+
+export async function markSettingsClean(userId: string): Promise<void> {
+  const d = await ensureDb();
+  await d.execute("UPDATE app_settings SET dirty = 0 WHERE user_id = $1", [userId]);
+}
+
+export async function upsertSettingsLocal(row: SettingsSyncRow): Promise<void> {
+  const d = await ensureDb();
+  if (row.deleted) {
+    await d.execute("DELETE FROM app_settings WHERE user_id = $1", [row.userId]);
+    return;
+  }
+  await d.execute(
+    `INSERT INTO app_settings (user_id, start_date, hour_start, hour_label, theme, lang, created_at, updated_at, deleted, dirty)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 0, 0)
+     ON CONFLICT (user_id) DO UPDATE SET
+       start_date = excluded.start_date,
+       hour_start = excluded.hour_start,
+       hour_label = excluded.hour_label,
+       theme = excluded.theme,
+       lang = excluded.lang,
+       created_at = excluded.created_at,
+       updated_at = excluded.updated_at,
+       deleted = 0,
+       dirty = 0`,
+    [row.userId, row.startDate, row.hourStart, row.hourLabel, row.theme, row.lang, row.created_at, row.updated_at]
   );
 }
 

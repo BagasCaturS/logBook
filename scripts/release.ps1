@@ -17,6 +17,7 @@ try {
   npm version $version --no-git-tag-version
   node -e "const fs=require('fs');const p='src-tauri/tauri.conf.json';const j=JSON.parse(fs.readFileSync(p));j.version=process.argv[1];fs.writeFileSync(p,JSON.stringify(j,null,2)+'\n');" $version
   node -e "const fs=require('fs');const p='src-tauri/Cargo.toml';const t=fs.readFileSync(p,'utf8');const q=String.fromCharCode(34);fs.writeFileSync(p,t.replace(/^version = .*$/m,'version = '+q+process.argv[1]+q));" $version
+  node -e "const fs=require('fs');const p='src-tauri/Cargo.lock';const t=fs.readFileSync(p,'utf8');const q=String.fromCharCode(34);fs.writeFileSync(p,t.replace(new RegExp('name = '+q+'tauri-app'+q+'\\nversion = '+q+'[^'+q+']+'+q),'name = '+q+'tauri-app'+q+'\nversion = '+q+process.argv[1]+q));" $version
 } finally {
   Pop-Location
 }

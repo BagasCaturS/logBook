@@ -48,6 +48,20 @@ export async function signUp(settings: AppSettings, email: string, password: str
   return c.auth.signUp({ email, password });
 }
 
+/**
+ * Cek apakah email sudah terdaftar di project (via RPC check_email_registered).
+ * Mengembalikan true/false, atau null bila fungsi RPC tidak tersedia (mis.
+ * project belum menjalankan supabase-setup.sql versi terbaru) — UI harus
+ * bersikap netral (tanpa pesan) saat null.
+ */
+export async function checkEmailRegistered(settings: AppSettings, email: string): Promise<boolean | null> {
+  const c = getClient(settings);
+  if (!c) return null;
+  const { data, error } = await c.rpc("check_email_registered", { p_email: email.trim() });
+  if (error) return null;
+  return typeof data === "boolean" ? data : null;
+}
+
 export async function signOut(settings: AppSettings) {
   const c = getClient(settings);
   if (!c) return;

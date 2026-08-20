@@ -14,9 +14,10 @@ export interface ExportRange {
   minggu?: number;
 }
 
-// Lebar tetap kolom "Kegiatan" (78mm): total 182mm tersedia dikurangi kolom tetap
-// 28+18+18+40 = 104mm. Dengan lebar deterministik, layout rich text (didParseCell)
-// dan tinggi baris (autotable) selalu konsisten.
+// Lebar tetap kolom "Kegiatan" (78mm): total area cetak A4 182mm (210 - 2×14
+// margin) dikurangi kolom tetap 28+18+18+16+24 = 104mm. Dengan lebar
+// deterministik, layout rich text (didParseCell) dan tinggi baris (autotable)
+// selalu konsisten.
 const KEGIATAN_COL = 4;
 const KEGIATAN_WIDTH = 78;
 const CELL_PADDING_H = 4; // cellPadding default 2 → horizontal 4
@@ -85,7 +86,7 @@ export function buildPdf(
       2: { cellWidth: 18 },
       3: { cellWidth: 16 },
       4: { cellWidth: KEGIATAN_WIDTH },
-      5: { cellWidth: 40 },
+      5: { cellWidth: 24 },
     },
     didParseCell: (data) => {
       const cell = data.cell as unknown as {

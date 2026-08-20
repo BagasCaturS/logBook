@@ -26,6 +26,7 @@ interface Props {
   userId: string;
   hourStart: string;
   hourLabel: string;
+  supabaseUrl: string;
   updateInfo: UpdateInfo | null;
   updateState: string;
   updateError: string | null;
@@ -38,6 +39,7 @@ interface Props {
   onSaveTheme: (id: string) => void;
   onSaveLang: (l: Lang) => void;
   onDeleteCategory: (c: Category) => void;
+  onChangeConnection: () => void;
   onLogout: () => void;
   onBack: () => void;
 }
@@ -57,6 +59,7 @@ export default function SettingsView({
   userId,
   hourStart,
   hourLabel,
+  supabaseUrl,
   updateInfo,
   updateState,
   updateError,
@@ -69,6 +72,7 @@ export default function SettingsView({
   onSaveTheme,
   onSaveLang,
   onDeleteCategory,
+  onChangeConnection,
   onLogout,
   onBack,
 }: Props) {
@@ -453,7 +457,17 @@ export default function SettingsView({
             Error: {syncError}
           </p>
         )}
+        <div className="settings-meta">
+          <p>
+            <span>{t(lang, "settings.connectionCurrent")}</span>
+            <strong>{supabaseUrl || "-"}</strong>
+          </p>
+        </div>
+        <p className="hint">{t(lang, "settings.connectionNote")}</p>
         <div className="row actions">
+          <button className="secondary" onClick={onChangeConnection}>
+            {t(lang, "settings.changeConnection")}
+          </button>
           <button className="secondary" onClick={onLogout}>
             <IconLogout size={15} />
             {t(lang, "settings.logout")}

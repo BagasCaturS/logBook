@@ -6,6 +6,7 @@ import Login from "./components/Login";
 import SettingsView from "./components/SettingsView";
 import Setup from "./components/Setup";
 import CalendarView from "./components/CalendarView";
+import UndoToast from "./components/UndoToast";
 import { IconBook, IconGear, IconRefresh } from "./components/icons";
 import {
   addCategory,
@@ -15,15 +16,17 @@ import {
   listCategories,
   listDailyNotes,
   listEntries,
+  markSettingsChanged,
+  restoreEntry,
   saveDailyNote,
   updateEntry,
 } from "./lib/db";
 import { formatDateTime } from "./lib/dates";
 import { t } from "./lib/i18n";
 import { plainTextFromHtml } from "./lib/richtext";
-import { getClient, getCurrentSession, onAuthChange, signIn, signOut, signUp } from "./lib/supabase";
+import { checkEmailRegistered, getClient, getCurrentSession, onAuthChange, signIn, signOut, signUp } from "./lib/supabase";
 import { deletePhotos, uploadPhoto, type PhotoOps } from "./lib/photos";
-import { loadSettings, saveSettings } from "./lib/settings";
+import { loadSettings, normalizeUrl, saveSettings } from "./lib/settings";
 import { syncNow } from "./lib/sync";
 import { DEFAULT_THEME } from "./lib/themes";
 import { checkForUpdate, downloadAndInstall } from "./lib/update";
@@ -71,11 +74,14 @@ export default function App() {
     total: null,
   });
   const [previewPhoto, setPreviewPhoto] = useState<string | null>(null);
+  const [undoEntry, setUndoEntry] = useState<LogbookEntry | null>(null);
+  const [connOpen, setConnOpen] = useState(false);
 
   const settingsRef = useRef(settings);
   settingsRef.current = settings;
   const syncTimer = useRef<number | null>(null);
   const syncInFlight = useRef(false);
+  const undoTimer = useRef<number | null>(null);
 
   const refreshEntries = useCallback(async (userId: string) => {
     setEntries(await listEntries(userId));
@@ -96,6 +102,8 @@ export default function App() {
       const s = settingsRef.current;
       const client = getClient(s);
       await syncNow(client, session?.userId ?? null, s, setSyncStatus);
+      // syncNow bisa menulis pengaturan cloud ke localStorage — sinkronkan state
+      setSettings(loadSettings());
     } finally {
       syncInFlight.current = false;
     }
@@ -124,24 +132,29 @@ export default function App() {
     });
   }, []);
 
-  // restore session on boot
+  // restore session on boot; ikuti perubahan sesi dari client AKTIF. Client
+  // dibuat ulang saat koneksi berubah, jadi listener re-subscribe mengikuti
+  // url+key terkini — mencegah event dari client baru tidak sampai ke UI.
   useEffect(() => {
+    let cancelled = false;
+    let unsub: (() => void) | undefined;
     (async () => {
       const s = loadSettings();
       const sess = await getCurrentSession(s);
-      setSession(
-        sess ? { userId: sess.user.id, email: sess.user.email } : null
-      );
-      setInitializing(false);
-    })();
-    const unsub = onAuthChange(loadSettings(), (sess) => {
+      if (cancelled) return;
       setSession(sess ? { userId: sess.user.id, email: sess.user.email } : null);
-    });
+      setInitializing(false);
+      unsub = onAuthChange(s, (next) => {
+        setSession(next ? { userId: next.user.id, email: next.user.email } : null);
+      });
+    })();
     return () => {
-      unsub();
+      cancelled = true;
+      unsub?.();
       if (syncTimer.current) window.clearTimeout(syncTimer.current);
+      if (undoTimer.current) window.clearTimeout(undoTimer.current);
     };
-  }, []);
+  }, [settings.supabaseUrl, settings.supabaseAnonKey]);
 
   // load entries + categories, start sync loop when session appears
   useEffect(() => {
@@ -150,6 +163,7 @@ export default function App() {
       setCategories([]);
       return;
     }
+    setConnOpen(false);
     void refreshEntries(session.userId);
     void refreshCategories(session.userId);
     void refreshNotes(session.userId);
@@ -159,9 +173,33 @@ export default function App() {
   }, [session?.userId, refreshEntries, refreshCategories, refreshNotes, runSync]);
 
   async function handleSaveSetup(url: string, key: string) {
-    const next: AppSettings = { ...settingsRef.current, supabaseUrl: url, supabaseAnonKey: key };
+    const next: AppSettings = {
+      ...settingsRef.current,
+      supabaseUrl: normalizeUrl(url),
+      supabaseAnonKey: key.trim(),
+    };
     saveSettings(next);
     setSettings(next);
+  }
+
+  /** Simpan kredensial baru dari panel Ubah Koneksi di halaman login. */
+  async function handleChangeConnection(url: string, key: string) {
+    const next: AppSettings = {
+      ...settingsRef.current,
+      supabaseUrl: normalizeUrl(url),
+      supabaseAnonKey: key.trim(),
+    };
+    saveSettings(next);
+    setSettings(next);
+    setConnOpen(false);
+  }
+
+  /** Dari Pengaturan: logout lalu tampilkan halaman login dengan panel Ubah Koneksi terbuka. */
+  async function handleOpenChangeConnection() {
+    await signOut(settingsRef.current);
+    setSession(null);
+    setView("main");
+    setConnOpen(true);
   }
 
   async function handleLogin(email: string, password: string, mode: "login" | "signup") {
@@ -175,14 +213,18 @@ export default function App() {
       }
       return msg;
     }
-    if (mode === "signup") {
-      // session may already exist if email confirmation is disabled
-      if (res.data.session) {
-        setSession({ userId: res.data.session.user.id, email: res.data.session.user.email });
-      }
-      return null;
+    // Set state sesi secara EKSPLISIT: listener onAuthChange dapat terikat ke
+    // client lama bila koneksi baru saja diubah, sehingga event SIGNED_IN tidak
+    // sampai ke UI — gejala: login "tidak terjadi apa-apa", padahal sesi
+    // tersimpan (terbukti dari auto-login setelah app dibuka ulang).
+    if (res.data.session) {
+      setSession({ userId: res.data.session.user.id, email: res.data.session.user.email });
     }
     return null;
+  }
+
+  async function handleCheckEmail(email: string): Promise<boolean | null> {
+    return checkEmailRegistered(settingsRef.current, email);
   }
 
   async function handleSaveEntry(input: EntryInput, id: string | null, photoOps: PhotoOps) {
@@ -230,6 +272,26 @@ export default function App() {
     queueSync();
   }
 
+  /** Tandai perubahan pengaturan untuk disinkronkan setelah ditulis ke localStorage. */
+  async function handleSettingsSync(patch: {
+    startDate?: string;
+    hourStart?: string;
+    hourLabel?: string;
+    theme?: string;
+    lang?: string;
+  }) {
+    if (!session) return;
+    const base = settingsRef.current;
+    await markSettingsChanged(session.userId, {
+      startDate: patch.startDate ?? base.startDate,
+      hourStart: patch.hourStart ?? base.hourStart,
+      hourLabel: patch.hourLabel ?? base.hourLabel,
+      theme: patch.theme ?? base.theme,
+      lang: patch.lang ?? base.lang,
+    });
+    queueSync();
+  }
+
   function closeDialog() {
     if (dialogLeaving) return;
     setDialogLeaving(true);
@@ -242,21 +304,39 @@ export default function App() {
 
   async function handleConfirmDelete() {
     if (!session || !confirmDelete || dialogLeaving) return;
-    const id = confirmDelete.id;
+    const entry = confirmDelete;
     setDialogLeaving(true);
     await delay(170);
     setConfirmDelete(null);
     setDialogLeaving(false);
-    setLeavingId(id);
+    setLeavingId(entry.id);
     await delay(260);
-    const paths = confirmDelete.photo_paths ?? [];
-    const client = getClient(settingsRef.current);
-    if (client && paths.length > 0) {
-      await deletePhotos(client, paths);
-    }
-    await deleteEntry(id, session.userId);
+    await deleteEntry(entry.id, session.userId);
     await refreshEntries(session.userId);
     setLeavingId(null);
+    queueSync();
+    // Masa undo 10 detik: foto storage dihapus setelah lewat agar bisa dibatalkan.
+    const paths = entry.photo_paths ?? [];
+    if (undoTimer.current) window.clearTimeout(undoTimer.current);
+    setUndoEntry(entry);
+    undoTimer.current = window.setTimeout(() => {
+      undoTimer.current = null;
+      setUndoEntry(null);
+      const client = getClient(settingsRef.current);
+      if (client && paths.length > 0) {
+        void deletePhotos(client, paths);
+      }
+    }, 10_000);
+  }
+
+  async function handleUndoDelete() {
+    if (!session || !undoEntry) return;
+    const entry = undoEntry;
+    if (undoTimer.current) window.clearTimeout(undoTimer.current);
+    undoTimer.current = null;
+    setUndoEntry(null);
+    await restoreEntry(entry.id, session.userId);
+    await refreshEntries(session.userId);
     queueSync();
   }
 
@@ -314,7 +394,18 @@ export default function App() {
   }
 
   if (!session) {
-    return <Login lang={settings.lang} onLogin={handleLogin} />;
+    return (
+      <Login
+        lang={settings.lang}
+        initialUrl={settings.supabaseUrl}
+        initialKey={settings.supabaseAnonKey}
+        connOpen={connOpen}
+        onToggleConn={() => setConnOpen(!connOpen)}
+        onChangeConnection={(url, key) => void handleChangeConnection(url, key)}
+        onCheckEmail={handleCheckEmail}
+        onLogin={handleLogin}
+      />
+    );
   }
 
   const lang = settings.lang;
@@ -397,6 +488,7 @@ export default function App() {
           userId={session.userId}
           hourStart={settings.hourStart}
           hourLabel={settings.hourLabel}
+          supabaseUrl={settings.supabaseUrl}
           updateInfo={updateInfo}
           updateState={updateState}
           updateError={updateError}
@@ -413,23 +505,28 @@ export default function App() {
             const next = { ...settingsRef.current, startDate: d };
             saveSettings(next);
             setSettings(next);
+            void handleSettingsSync({ startDate: d });
           }}
           onSaveHours={(start, label) => {
             const next = { ...settingsRef.current, hourStart: start, hourLabel: label };
             saveSettings(next);
             setSettings(next);
+            void handleSettingsSync({ hourStart: start, hourLabel: label });
           }}
           onSaveTheme={(id) => {
             const next = { ...settingsRef.current, theme: id };
             saveSettings(next);
             setSettings(next);
+            void handleSettingsSync({ theme: id });
           }}
           onSaveLang={(l) => {
             const next = { ...settingsRef.current, lang: l };
             saveSettings(next);
             setSettings(next);
+            void handleSettingsSync({ lang: l });
           }}
           onDeleteCategory={(c) => setConfirmDeleteCategory(c)}
+          onChangeConnection={() => void handleOpenChangeConnection()}
           onLogout={() => void handleLogout()}
           onBack={() => setView("main")}
         />
@@ -559,6 +656,18 @@ export default function App() {
             </button>
           </div>
         </div>
+      )}
+
+      {undoEntry && (
+        <UndoToast
+          lang={lang}
+          onUndo={() => void handleUndoDelete()}
+          onDismiss={() => {
+            if (undoTimer.current) window.clearTimeout(undoTimer.current);
+            undoTimer.current = null;
+            setUndoEntry(null);
+          }}
+        />
       )}
 
       <footer className="app-footer">

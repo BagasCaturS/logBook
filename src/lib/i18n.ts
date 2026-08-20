@@ -164,6 +164,13 @@ const dict: Record<string, { id: string; en: string }> = {
   "settings.syncStatus": { id: "Status sinkron", en: "Sync status" },
   "settings.lastSync": { id: "terakhir {time}", en: "last {time}" },
   "settings.logout": { id: "Logout", en: "Logout" },
+  "settings.changeConnection": { id: "Ubah Koneksi", en: "Change Connection" },
+  "settings.connectionNote": {
+    id: "Ganti Project URL & anon key akan mengakhiri sesi saat ini. Data lokal di perangkat ini tetap tersimpan, tapi tidak ikut ke project baru.",
+    en: "Changing the Project URL & anon key will end the current session. Local data on this device is kept, but will not move to the new project.",
+  },
+  "settings.connectionCurrent": { id: "Koneksi aktif", en: "Active connection" },
+  "settings.backConnection": { id: "Kembali", en: "Back" },
   "settings.update": { id: "Pembaruan", en: "Updates" },
   "settings.version": { id: "Versi terpasang", en: "Installed version" },
   "settings.versionAvailable": { id: "Versi tersedia:", en: "Available version:" },
@@ -213,6 +220,10 @@ const dict: Record<string, { id: string; en: string }> = {
   },
   "note.save": { id: "Simpan catatan", en: "Save note" },
   "note.saved": { id: "Tersimpan", en: "Saved" },
+
+  // undo delete
+  "undo.deleted": { id: "Entri dihapus", en: "Entry deleted" },
+  "undo.action": { id: "Batalkan", en: "Undo" },
 
   // export PDF
   "export.title": { id: "Ekspor PDF", en: "Export PDF" },
@@ -292,6 +303,13 @@ const dict: Record<string, { id: string; en: string }> = {
   "login.switchSignup": { id: "Belum punya akun? Daftar", en: "Don't have an account? Sign up" },
   "login.switchLogin": { id: "Sudah punya akun? Login", en: "Already have an account? Log in" },
   "login.credit": { id: "Dibuat oleh Sapporo", en: "Made by Sapporo" },
+  "login.changeConnection": { id: "Ubah Koneksi", en: "Change Connection" },
+  "login.emailTaken": {
+    id: "Email sudah terdaftar — silakan ",
+    en: "Email is already registered — please ",
+  },
+  "login.emailAvailable": { id: "Email tersedia.", en: "Email is available." },
+  "login.emailChecking": { id: "Memeriksa email…", en: "Checking email…" },
 
   // setup
   "setup.title": { id: "Konfigurasi Supabase", en: "Supabase Configuration" },
@@ -302,6 +320,49 @@ const dict: Record<string, { id: string; en: string }> = {
   "setup.projectUrl": { id: "Project URL", en: "Project URL" },
   "setup.anonKey": { id: "Anon Key", en: "Anon Key" },
   "setup.save": { id: "Simpan & Lanjutkan", en: "Save & Continue" },
+  "setup.urlHint": {
+    id: "Kredensial disimpan lokal di perangkat ini dan tidak disinkronkan.",
+    en: "Credentials are stored locally on this device and are not synced.",
+  },
+  "setup.test": { id: "Uji Koneksi", en: "Test Connection" },
+  "setup.testing": { id: "Menguji…", en: "Testing…" },
+  "setup.testOk": { id: "Koneksi berhasil — URL dan key valid.", en: "Connection OK — URL and key are valid." },
+  "setup.urlScheme": {
+    id: "URL harus diawali https:// — contoh: https://xxxx.supabase.co",
+    en: "URL must start with https:// — e.g. https://xxxx.supabase.co",
+  },
+  "setup.keyFormat": {
+    id: "Format anon key tidak dikenali. Salin 'anon/public key' dari Dashboard → Project Settings → API (diawali sb_publishable_ atau eyJ).",
+    en: "Unknown anon key format. Copy the 'anon/public key' from Dashboard → Project Settings → API (starts with sb_publishable_ or eyJ).",
+  },
+  "setup.healthFail": {
+    id: "Project tidak dapat dijangkau atau tidak aktif: periksa URL (Project Settings → API), pastikan project tidak dipause, dan koneksi internet berjalan.",
+    en: "Project unreachable or inactive: check the URL (Project Settings → API), make sure the project is not paused, and that you are online.",
+  },
+  "setup.testUnauthorized": {
+    id: "Koneksi ditolak: anon key tidak valid untuk project ini. Pastikan key adalah anon/public TERKINI dari Dashboard → Project Settings → API (key bisa berubah setelah regenerasi).",
+    en: "Connection rejected: the anon key is not valid for this project. Make sure it is the LATEST anon/public key from Dashboard → Project Settings → API (keys can change after regeneration).",
+  },
+  "setup.tableMissing": {
+    id: "Project terhubung tapi belum di-setup: jalankan docs/supabase-setup.sql di Dashboard → SQL Editor, lalu jalankan: NOTIFY pgrst, 'reload schema';",
+    en: "Project is reachable but not set up yet: run docs/supabase-setup.sql in Dashboard → SQL Editor, then run: NOTIFY pgrst, 'reload schema';",
+  },
+  "setup.testServerError": {
+    id: "Server project bermasalah (kode {code}). Coba lagi nanti atau periksa status project di dashboard.",
+    en: "Project server error (code {code}). Try again later or check the project status in the dashboard.",
+  },
+  "setup.testTimeout": {
+    id: "Waktu uji habis (10 detik). Periksa koneksi internet atau coba lagi.",
+    en: "Test timed out (10 seconds). Check your internet connection or try again.",
+  },
+  "setup.testBadResponse": {
+    id: "Respons tak terduga (kode {code}). Periksa URL dan key.",
+    en: "Unexpected response (code {code}). Check the URL and key.",
+  },
+  "setup.testUnreachable": {
+    id: "Server tidak dapat dijangkau. Periksa koneksi internet dan URL.",
+    en: "Server unreachable. Check your internet connection and the URL.",
+  },
 
   // dialog
   "dialog.deleteEntry": { id: "Hapus catatan ini?", en: "Delete this entry?" },

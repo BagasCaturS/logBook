@@ -34,20 +34,24 @@ export interface PickResult {
 }
 
 export async function pickBackupFile(): Promise<PickResult> {
-  const path = await open({
+  const result = await open({
     multiple: false,
     directory: false,
     filters: [jsonFilter],
   });
+  // Beberapa versi plugin-dialog mengembalikan array meski multiple:false.
+  const path = Array.isArray(result) ? (result[0] ?? null) : result;
   if (typeof path !== "string" || !path) return { cancelled: true, data: null };
-  let parsed: unknown;
   try {
     const raw = await readTextFile(path);
-    parsed = JSON.parse(raw);
-  } catch {
+    const parsed: unknown = JSON.parse(raw);
+    const data = validateBackup(parsed);
+    return { cancelled: false, data };
+  } catch (err) {
+    // JSON rusak / file tak terbaca / struktur salah — laporkan sebagai data null
+    console.error("pickBackupFile failed:", err);
     return { cancelled: false, data: null };
   }
-  return { cancelled: false, data: validateBackup(parsed) };
 }
 
 function validateBackup(v: unknown): BackupData | null {

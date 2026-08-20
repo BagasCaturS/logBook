@@ -6,23 +6,29 @@ import {
   getDirtyCategories,
   getDirtyEntries,
   getDirtyNotes,
+  getDirtySettingsRows,
   getEntry,
+  getSettingsRow,
   listEntries,
   markCategoryClean,
   markClean,
   markNoteClean,
+  markSettingsClean,
   upsertCategoryLocal,
   upsertLocal,
   upsertNoteLocal,
+  upsertSettingsLocal,
+  type SettingsSyncRow,
 } from "./db";
 import { cleanupOrphanPhotos, deletePhotos } from "./photos";
-import { saveSettings } from "./settings";
+import { applyRemoteSettings, saveSettings } from "./settings";
 import { localNewerThan, parseTs } from "./syncLogic";
 import type {
   AppSettings,
   Category,
   DailyNote,
   LogbookEntry,
+  RemoteAppSettings,
   RemoteCategory,
   RemoteDailyNote,
   RemoteEntry,
@@ -96,6 +102,10 @@ interface TableAdapter<TLocal> {
   fromRemote: (r: Record<string, unknown>, userId: string) => TLocal;
   touchedAt: (row: TLocal) => string;
   idOf: (row: TLocal) => string;
+  /** kolom UNIQUE untuk upsert remote (default "id") */
+  onConflictColumn?: string;
+  /** kolom kunci untuk query push/pull remote (default "id") */
+  remoteKeyColumn?: string;
   /** dipanggil sebelum baris lokal dihapus karena remote berstatus deleted (soft delete) */
   onRemoteDelete?: (row: TLocal, client: SupabaseClient) => Promise<void>;
   /**
@@ -122,19 +132,25 @@ async function syncTable<TLocal>(
   // ---- PUSH local dirty rows ----
   const dirty = await getDirty(userId);
   if (dirty.length > 0) {
+    const keyCol = adapter.remoteKeyColumn ?? "id";
     const ids = dirty.map(adapter.idOf);
     const existing: { id: string; updated_at: string }[] = [];
     for (let i = 0; i < ids.length; i += 40) {
       const chunk = ids.slice(i, i + 40);
       const { data, error } = await client
         .from(table)
-        .select("id, updated_at")
-        .in("id", chunk);
+        .select(`${keyCol}, updated_at` as unknown as string)
+        .in(keyCol, chunk);
       if (error) throw error;
-      existing.push(...((data as { id: string; updated_at: string }[]) ?? []));
+      existing.push(
+        ...(((data as unknown as { updated_at: string }[] | null) ?? []).map((r) => ({
+          id: String((r as Record<string, unknown>)[keyCol]),
+          updated_at: r.updated_at,
+        })))
+      );
     }
 
-    const remoteTs = new Map<string, number>(existing.map((r) => [r.id, parseTs(r.updated_at)]));
+    const remoteTs = new Map<string, number>(existing.map((r) => [String(r.id), parseTs(r.updated_at)]));
     const toPush = dirty.filter((e) => {
       const rt = remoteTs.get(adapter.idOf(e)) ?? 0;
       return rt <= parseTs(adapter.touchedAt(e));
@@ -143,7 +159,7 @@ async function syncTable<TLocal>(
     if (toPush.length > 0) {
       const { error: upsertErr } = await client
         .from(table)
-        .upsert(toPush.map(adapter.payload), { onConflict: "id" });
+        .upsert(toPush.map(adapter.payload), { onConflict: adapter.onConflictColumn ?? "id" });
       if (upsertErr) throw upsertErr;
       for (const row of toPush) {
         await adapter.markClean(adapter.idOf(row));
@@ -182,10 +198,11 @@ async function syncTable<TLocal>(
   }
 
   let maxRemoteTs = 0;
+  const pullKeyCol = adapter.remoteKeyColumn ?? "id";
   for (const r of rows) {
     const updated = parseTs(String(r.updated_at ?? ""));
     maxRemoteTs = Math.max(maxRemoteTs, updated);
-    const id = String(r.id);
+    const id = String(r[pullKeyCol]);
     const local = await adapter.getLocal(id, userId);
     // Guard LWW: skip hanya jika lokal benar-benar LEBIH BARU. Baris dengan
     // timestamp sama dengan remote (di-pull oleh versi klien lama yang belum
@@ -282,6 +299,47 @@ const dailyNoteAdapter: TableAdapter<DailyNote> = {
   fullPull: true,
 };
 
+const settingsAdapter: TableAdapter<SettingsSyncRow> = {
+  selectColumns: "*",
+  getLocal: (userId) => getSettingsRow(userId),
+  upsertLocal: upsertSettingsLocal,
+  markClean: markSettingsClean,
+  payload: (s) => ({
+    user_id: s.userId,
+    start_date: s.startDate,
+    hour_start: s.hourStart,
+    hour_label: s.hourLabel,
+    theme: s.theme,
+    lang: s.lang,
+    created_at: s.created_at,
+    updated_at: s.updated_at,
+    // 1/0 works for both BOOLEAN and INTEGER columns in PostgreSQL
+    deleted: s.deleted ? 1 : 0,
+  }),
+  fromRemote: (r, userId) => {
+    const rv = r as unknown as RemoteAppSettings;
+    return {
+      userId,
+      startDate: rv.start_date ?? "",
+      hourStart: rv.hour_start ?? "11:00",
+      hourLabel: rv.hour_label ?? "hour",
+      theme: rv.theme ?? "jurnal",
+      lang: rv.lang ?? "id",
+      created_at: rv.created_at ?? "",
+      updated_at: rv.updated_at ?? "",
+      deleted: !!rv.deleted,
+      dirty: false,
+    };
+  },
+  touchedAt: (s) => s.updated_at,
+  idOf: (s) => s.userId,
+  // satu baris per user: konflik diupsert on user_id
+  onConflictColumn: "user_id",
+  remoteKeyColumn: "user_id",
+  // pull penuh: perubahan pengaturan di perangkat lain selalu terambil
+  fullPull: true,
+};
+
 /**
  * One sync cycle: push local dirty rows, then pull remote changes since the
  * last watermark (full table for fullPull adapters). Last-write-wins on
@@ -304,16 +362,24 @@ export async function syncNow(
 
   try {
     const watermark = settings.lastSyncAt ?? "1970-01-01T00:00:00.000Z";
-    const [entryTs, catTs, noteTs] = await Promise.all([
+    const [entryTs, catTs, noteTs, settingsTs] = await Promise.all([
       syncTable(client, "logbook_entries", userId, watermark, getDirtyEntries, entryAdapter),
       syncTable(client, "categories", userId, watermark, getDirtyCategories, categoryAdapter),
       syncTable(client, "daily_notes", userId, watermark, getDirtyNotes, dailyNoteAdapter),
+      syncTable(client, "app_settings", userId, watermark, getDirtySettingsRows, settingsAdapter),
     ]);
 
-    const maxRemoteTs = Math.max(entryTs, catTs, noteTs);
+    const maxRemoteTs = Math.max(entryTs, catTs, noteTs, settingsTs);
     const newWatermark = maxRemoteTs > 0 ? new Date(maxRemoteTs).toISOString() : settings.lastSyncAt;
     const nextSettings: AppSettings = { ...settings, lastSyncAt: newWatermark };
     saveSettings(nextSettings);
+
+    // Terapkan pengaturan cloud ke localStorage bila baris staging bersih
+    // (artinya tidak ada edit lokal yang belum ter-push — konflik menang LWW).
+    const settingsRow = await getSettingsRow(userId);
+    if (settingsRow && !settingsRow.dirty) {
+      saveSettings(applyRemoteSettings(nextSettings, settingsRow));
+    }
 
     // Bersihkan foto yatim di bucket: hapus file yang tidak dirujuk entri hidup.
     // Kegagalan di sini tidak menggagalkan sinkronisasi.

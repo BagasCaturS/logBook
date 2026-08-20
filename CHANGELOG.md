@@ -3,6 +3,29 @@
 Semua perubahan penting pada Online Logbook dicatat di sini.
 Format mengikuti pola `[Versi] - Tanggal`; setiap entri mencatat tambahan (Added), perbaikan (Fixed), dan catatan migrasi (Migration).
 
+## [0.9.0] - 2026-08-20
+
+### Added
+- **Bring-Your-Own-Supabase (BYO)** — aplikasi tidak lagi menyertakan kredensial bawaan:
+  - Layar Setup pada pertama kali dijalankan (URL project + anon key)
+  - Tombol "Uji Koneksi" (validasi URL, key, dan kesiapan setup SQL)
+  - Ganti koneksi kapan saja: panel "Ubah Koneksi" di halaman login & tombol di Settings
+- **Sinkronisasi pengaturan lintas perangkat** melalui tabel `app_settings` (tema, bahasa, periode & jam mulai) — konflik diselesaikan LWW by `updated_at`
+- **Undo hapus entri** — notifikasi pulihkan dalam 10 detik setelah penghapusan (foto ikut dipulihkan)
+- **Pengecekan email terdaftar** saat signup (RPC `check_email_registered`)
+- **Satu file setup SQL idempotent** `docs/supabase-setup.sql` menggantikan `supabase-0.5/0.6/0.8.sql`
+- README bilingual (Bahasa Indonesia / English) dengan langkah setup BYO
+
+### Fixed
+- **Login "tidak terjadi apa-apa" setelah ganti koneksi** — sesi kini di-set eksplisit setelah sign in, dan listener auth mengikuti koneksi aktif (sebelumnya listener terikat client lama, sehingga login sebenarnya berhasil tapi UI tetap di halaman login; sesi baru baru tampil setelah app dibuka ulang)
+- **Uji koneksi false-negative** — query REST nyata diuji lebih dulu (PostgREST selalu mengirim header CORS); endpoint `auth/v1/health` hanya menjadi fallback diagnosis; deteksi project yang dipause (respons HTML)
+- **Restore backup tidak melakukan apa-apa** — hasil `open()` dialog yang berupa array kini ditangani dengan benar
+- **Error SQL "cannot alter type of a column used in a policy definition"** — policy di-drop sebelum normalisasi tipe `user_id` ke TEXT, lalu dibuat ulang
+
+### Migration
+- Jalankan ulang `docs/supabase-setup.sql` di Supabase Dashboard → SQL Editor (menambahkan RPC `check_email_registered`, normalisasi `user_id` ke TEXT untuk database lama), lalu jalankan `NOTIFY pgrst, 'reload schema';`
+- Tanpa menjalankan ulang setup SQL, fungsi pengecekan email tidak tersedia (aplikasi tetap berfungsi normal)
+
 ## [0.8.0] - 2026-08-18
 
 ### Added
@@ -14,7 +37,7 @@ Format mengikuti pola `[Versi] - Tanggal`; setiap entri mencatat tambahan (Added
 - `CHANGELOG.md` — riwayat perubahan semua versi
 
 ### Migration
-- Jalankan `docs/supabase-0.8.sql` di Supabase Dashboard → SQL Editor (tabel `daily_notes` + index + RLS)
+- Jalankan `docs/supabase-0.8.sql` di Supabase Dashboard → SQL Editor (tabel `daily_notes` + index + RLS). File per versi telah digabung ke `docs/supabase-setup.sql` sejak v0.9.0.
 
 ## [0.7.3] - 2026-08-18
 

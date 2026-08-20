@@ -58,6 +58,19 @@ export interface RemoteDailyNote {
   deleted: boolean;
 }
 
+/** Baris cloud tabel `app_settings` (satu baris per user). */
+export interface RemoteAppSettings {
+  user_id: string;
+  start_date: string;
+  hour_start: string;
+  hour_label: string;
+  theme: string;
+  lang: string;
+  created_at: string;
+  updated_at: string;
+  deleted: boolean;
+}
+
 export interface AppSettings {  supabaseUrl: string;
   supabaseAnonKey: string;
   startDate: string; // YYYY-MM-DD or '' when not set
