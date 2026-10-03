@@ -368,6 +368,55 @@ const dict: Record<string, { id: string; en: string }> = {
   "dialog.deleteEntry": { id: "Hapus catatan ini?", en: "Delete this entry?" },
   "dialog.delete": { id: "Hapus", en: "Delete" },
   "dialog.cancel": { id: "Batal", en: "Cancel" },
+
+  // mode data (local / supabase)
+  "settings.modeTitle": { id: "Mode Data", en: "Data Mode" },
+  "settings.modeSupabase": { id: "☁️ Supabase (Sinkronisasi Cloud)", en: "☁️ Supabase (Cloud Sync)" },
+  "settings.modeLocal": { id: "💾 Lokal Saja (Offline)", en: "💾 Local Only (Offline)" },
+  "settings.modeHint": {
+    id: "Supabase: sinkronisasi lintas perangkat, butuh internet. Lokal: hanya di perangkat ini, tidak butuh internet.",
+    en: "Supabase: cross-device sync, needs internet. Local: only on this device, no internet needed."
+  },
+  "settings.localPassword": { id: "Password Lokal", en: "Local Password" },
+  "settings.localPasswordSet": { id: "Password sudah diatur", en: "Password is set" },
+  "settings.localPasswordNotSet": { id: "Belum ada password — atur di bawah", en: "No password set — set below" },
+  "settings.changeLocalPassword": { id: "Ganti Password Lokal", en: "Change Local Password" },
+  "settings.newLocalPassword": { id: "Password Baru", en: "New Password" },
+  "settings.confirmLocalPassword": { id: "Konfirmasi Password Baru", en: "Confirm New Password" },
+  "settings.passwordMismatch": { id: "Password tidak cocok", en: "Passwords do not match" },
+  "settings.passwordTooShort": { id: "Password minimal 6 karakter", en: "Password must be at least 6 characters" },
+  "settings.passwordChanged": { id: "Password lokal diubah", en: "Local password changed" },
+  "settings.currentPassword": { id: "Password Saat Ini", en: "Current Password" },
+  "settings.wrongCurrentPassword": { id: "Password saat ini salah", en: "Current password is incorrect" },
+
+  // login local
+  "login.localMode": { id: "Mode Lokal", en: "Local Mode" },
+  "login.localTitle": { id: "Masuk ke Mode Lokal", en: "Enter Local Mode" },
+  "login.createPassword": { id: "Buat Password Lokal", en: "Create Local Password" },
+  "login.confirmPassword": { id: "Konfirmasi Password", en: "Confirm Password" },
+  "login.wrongPassword": { id: "Password salah", en: "Wrong password" },
+  "login.localSwitch": { id: "Beralih ke Mode Lokal", en: "Switch to Local Mode" },
+  "login.supabaseSwitch": { id: "Beralih ke Supabase", en: "Switch to Supabase" },
+  "login.modeToggle": { id: "Mode:", en: "Mode:" },
+
+  // Enhanced login
+  "login.forgotPassword": { id: "Lupa password?", en: "Forgot password?" },
+  "login.rememberMe": { id: "Ingat saya", en: "Remember me" },
+  "login.showPassword": { id: "Tampilkan password", en: "Show password" },
+  "login.hidePassword": { id: "Sembunyikan password", en: "Hide password" },
+  "login.noAccount": { id: "Belum punya akun?", en: "Don't have an account?" },
+  "login.haveAccount": { id: "Sudah punya akun?", en: "Already have an account?" },
+  "login.signupLink": { id: "Daftar", en: "Sign up" },
+  "login.loginLink": { id: "Masuk", en: "Log in" },
+  "login.welcomeBack": { id: "Selamat datang kembali", en: "Welcome back" },
+  "login.welcome": { id: "Selamat datang", en: "Welcome" },
+  "login.enterCredentials": { id: "Masukkan kredensial Anda untuk melanjutkan", en: "Enter your credentials to continue" },
+  "login.createAccount": { id: "Buat akun baru", en: "Create new account" },
+  "login.setupLocal": { id: "Atur password lokal Anda", en: "Set up your local password" },
+  "login.passwordHint": { id: "Minimal 6 karakter", en: "At least 6 characters" },
+  "login.secureLogin": { id: "Login aman", en: "Secure login" },
+  "login.localModeDesc": { id: "Data hanya tersimpan di perangkat ini", en: "Data stored only on this device" },
+  "login.cloudModeDesc": { id: "Sinkronisasi lintas perangkat via Supabase", en: "Cross-device sync via Supabase" },
 };
 
 export function t(lang: Lang, key: string, vars?: Vars): string {

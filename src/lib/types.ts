@@ -71,7 +71,8 @@ export interface RemoteAppSettings {
   deleted: boolean;
 }
 
-export interface AppSettings {  supabaseUrl: string;
+export interface AppSettings {
+  supabaseUrl: string;
   supabaseAnonKey: string;
   startDate: string; // YYYY-MM-DD or '' when not set
   lastSyncAt: string | null;
@@ -79,6 +80,9 @@ export interface AppSettings {  supabaseUrl: string;
   lang: Lang;
   hourStart: string; // HH:MM
   hourLabel: string;
+  mode: "supabase" | "local";        // default "supabase"
+  localUserId?: string;              // UUID dari Supabase (reuse saat switch)
+  localPasswordHash?: string;        // hash password local (salt:hash hex)
 }
 
 export type SyncState = "online" | "offline" | "syncing" | "error";

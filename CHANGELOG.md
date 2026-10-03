@@ -3,6 +3,33 @@
 Semua perubahan penting pada Online Logbook dicatat di sini.
 Format mengikuti pola `[Versi] - Tanggal`; setiap entri mencatat tambahan (Added), perbaikan (Fixed), dan catatan migrasi (Migration).
 
+## [0.10.0] - 2026-08-20
+
+### Added
+- **Local-Only Mode (Offline)** — aplikasi bisa jalan sepenuhnya offline tanpa Supabase:
+  - Autentikasi password lokal (PBKDF2-SHA256, 100k iterasi via Web Crypto)
+  - Data tersimpan 100% di SQLite lokal (termasuk foto sebagai Base64)
+  - Tidak butuh internet, tidak butuh project Supabase
+  - Switch mode di Settings: Supabase ↔ Lokal Saja
+- **Login Page Redesign** — UI modern, user-centric:
+  - Toggle mode Supabase ↔ Lokal di halaman login
+  - Password visibility toggle (show/hide)
+  - Inline validasi email (checking/available/taken)
+  - Password strength hint (min 6 karakter)
+  - Animasi halus, loading spinner, focus states
+  - Aksesibilitas: ARIA labels, focus states, keyboard nav
+- **Settings: Manajemen Password Lokal** — ubah password lokal, status password
+- **Foto Base64 di SQLite** — mode lokal simpan foto sebagai Base64 di kolom `photo_data` (migrasi lazy)
+
+### Fixed
+- Login page UX: mode switcher, password visibility, inline validasi
+- Password strength hint, inline email validasi
+- Aksesibilitas: ARIA labels, focus states, keyboard nav
+- Icons: tambah IconMail, IconLock, IconEye, IconEyeOff, IconCloud, IconDatabase, IconArrowRight
+
+### Migration
+- Jalankan ulang `docs/supabase-setup.sql` di Supabase Dashboard → SQL Editor (tambah kolom `photo_data` di `logbook_entries`), lalu jalankan `NOTIFY pgrst, 'reload schema';`
+
 ## [0.9.0] - 2026-08-20
 
 ### Added

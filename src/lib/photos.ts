@@ -53,6 +53,21 @@ export async function compressImage(
   return blob;
 }
 
+/** Konversi Blob ke base64 string (tanpa prefix data:) */
+async function blobToBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = String(reader.result);
+      const comma = result.indexOf(",");
+      resolve(comma >= 0 ? result.slice(comma + 1) : result);
+    };
+    reader.onerror = () => reject(reader.error ?? new Error("Gagal baca base64"));
+    reader.readAsDataURL(blob);
+  });
+}
+
+/** Upload foto ke Supabase Storage (mode supabase) */
 export async function uploadPhoto(
   client: SupabaseClient,
   userId: string,
@@ -67,6 +82,46 @@ export async function uploadPhoto(
   return path;
 }
 
+/** Simpan foto ke SQLite sebagai base64 (mode lokal) */
+export async function savePhotoLocal(file: File): Promise<string> {
+  const blob = await compressImage(file);
+  const base64 = await blobToBase64(blob);
+  const localId = `local:${crypto.randomUUID()}`;
+  return `${localId}:${base64}`;
+}
+
+/** Hapus foto lokal (base64 di SQLite) — tidak perlu aksi khusus, cukup hapus referensi */
+export async function deletePhotosLocal(_paths: string[]): Promise<void> {
+  // base64 disimpan di kolom photo_data, dihapus saat entri dihapus/diupdate
+  // fungsi ini no-op untuk konsistensi API
+  return;
+}
+
+/** Dapatkan URL untuk tampilkan foto (mode supabase: URL storage, mode lokal: data URL base64) */
+export function getPhotoUrl(settings: { mode: "supabase" | "local"; supabaseUrl: string }, path: string): string {
+  if (settings.mode === "local") {
+    // path format: "local:<uuid>:<base64>"
+    const prefix = "local:";
+    if (path.startsWith(prefix)) {
+      const base64 = path.slice(prefix.length);
+      return `data:image/jpeg;base64,${base64}`;
+    }
+    // fallback untuk path lama
+    return "";
+  }
+  // supabase mode
+  return photoUrl(settings.supabaseUrl, path);
+}
+
+/** Ekstrak base64 dari path lokal */
+export function getLocalPhotoBase64(path: string): string | null {
+  const prefix = "local:";
+  if (path.startsWith(prefix)) {
+    return path.slice(prefix.length);
+  }
+  return null;
+}
+
 export async function deletePhotos(
   client: SupabaseClient,
   paths: string[]
@@ -74,7 +129,6 @@ export async function deletePhotos(
   if (paths.length === 0) return;
   const { error } = await client.storage.from(PHOTO_BUCKET).remove(paths);
   if (error) {
-    // best-effort: gagal menghapus tidak memblokir alur utama
     console.warn("gagal hapus foto storage:", error.message);
   }
 }

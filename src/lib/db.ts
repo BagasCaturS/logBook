@@ -90,6 +90,10 @@ export async function ensureDb(): Promise<Database> {
   if (!cols.some((c) => c.name === "jam")) {
     await db.execute("ALTER TABLE logbook_entries ADD COLUMN jam INTEGER");
   }
+  // migration: photo_data column (base64 for local mode, added in 0.9.0)
+  if (!cols.some((c) => c.name === "photo_data")) {
+    await db.execute("ALTER TABLE logbook_entries ADD COLUMN photo_data TEXT");
+  }
   await db.execute("CREATE INDEX IF NOT EXISTS idx_entries_user_tanggal ON logbook_entries (user_id, tanggal DESC)");
   await db.execute(`
     CREATE TABLE IF NOT EXISTS categories (

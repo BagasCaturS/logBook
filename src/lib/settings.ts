@@ -20,6 +20,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
   lang: "id",
   hourStart: DEFAULT_HOUR_START,
   hourLabel: DEFAULT_HOUR_LABEL,
+  mode: "supabase",          // "supabase" | "local"
+  localUserId: undefined,
+  localPasswordHash: undefined,
 };
 
 export function normalizeUrl(url: string): string {
@@ -29,7 +32,7 @@ export function normalizeUrl(url: string): string {
 }
 
 export function normalizeSettings(stored: Partial<AppSettings>): AppSettings {
-  return {
+  const base = {
     ...DEFAULT_SETTINGS,
     ...stored,
     // kredensial disimpan apa adanya (boleh kosong) — setiap user punya proyek sendiri
@@ -48,7 +51,12 @@ export function normalizeSettings(stored: Partial<AppSettings>): AppSettings {
       typeof stored.hourLabel === "string" && stored.hourLabel.trim()
         ? stored.hourLabel.trim()
         : DEFAULT_HOUR_LABEL,
+    // mode lokal: default "supabase" untuk backward compat
+    mode: stored.mode === "local" ? "local" : "supabase",
+    localUserId: stored.localUserId ?? undefined,
+    localPasswordHash: stored.localPasswordHash ?? undefined,
   };
+  return base as AppSettings;
 }
 
 export function loadSettings(): AppSettings {

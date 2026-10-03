@@ -27,6 +27,9 @@ interface Props {
   hourStart: string;
   hourLabel: string;
   supabaseUrl: string;
+  mode: "supabase" | "local";
+  localPasswordHash?: string;
+  _localUserId?: string;
   updateInfo: UpdateInfo | null;
   updateState: string;
   updateError: string | null;
@@ -42,6 +45,9 @@ interface Props {
   onChangeConnection: () => void;
   onLogout: () => void;
   onBack: () => void;
+  onSwitchMode: (toLocal: boolean) => void;
+  onChangeLocalPassword: (current: string, newPass: string) => Promise<string | null>;
+  _onCreateLocalPassword: (password: string) => Promise<string | null>;
 }
 
 export default function SettingsView({
@@ -60,6 +66,9 @@ export default function SettingsView({
   hourStart,
   hourLabel,
   supabaseUrl,
+  mode,
+  localPasswordHash,
+  _localUserId,
   updateInfo,
   updateState,
   updateError,
@@ -75,7 +84,13 @@ export default function SettingsView({
   onChangeConnection,
   onLogout,
   onBack,
+  onSwitchMode,
+  onChangeLocalPassword,
+  _onCreateLocalPassword,
 }: Props) {
+  // Suppress unused destructured vars (reserved for future use)
+  void _localUserId;
+  void _onCreateLocalPassword;
   const [draft, setDraft] = useState(startDate);
   const dirty = draft !== startDate;
   const [hourDraft, setHourDraft] = useState(hourStart);
@@ -87,6 +102,12 @@ export default function SettingsView({
   const [note, setNote] = useState<string | null>(null);
   const [noteErr, setNoteErr] = useState<string | null>(null);
   const [confirmRestore, setConfirmRestore] = useState(false);
+  const [showChangePassword, setShowChangePassword] = useState(false);
+  const [cpCurrent, setCpCurrent] = useState("");
+  const [cpNew, setCpNew] = useState("");
+  const [cpConfirm, setCpConfirm] = useState("");
+  const [cpError, setCpError] = useState<string | null>(null);
+  const [cpBusy, setCpBusy] = useState(false);
 
   const weeks = useMemo(() => {
     const s = new Set<number>();
@@ -197,6 +218,31 @@ export default function SettingsView({
       setNoteErr(t(lang, "backup.error", { error: errMessage(e) }));
     } finally {
       setTask(null);
+    }
+  }
+
+  async function handleChangeLocalPassword() {
+    if (cpNew !== cpConfirm) {
+      setCpError(t(lang, "settings.passwordMismatch"));
+      return;
+    }
+    if (cpNew.length < 6) {
+      setCpError(t(lang, "settings.passwordTooShort"));
+      return;
+    }
+    setCpBusy(true);
+    setCpError(null);
+    try {
+      const err = await onChangeLocalPassword(cpCurrent, cpNew);
+      if (err) setCpError(err);
+      else {
+        setShowChangePassword(false);
+        setCpCurrent("");
+        setCpNew("");
+        setCpConfirm("");
+      }
+    } finally {
+      setCpBusy(false);
     }
   }
 
@@ -457,22 +503,107 @@ export default function SettingsView({
             Error: {syncError}
           </p>
         )}
-        <div className="settings-meta">
-          <p>
-            <span>{t(lang, "settings.connectionCurrent")}</span>
-            <strong>{supabaseUrl || "-"}</strong>
-          </p>
+
+        {/* Mode Data Selector */}
+        <div className="set-fieldset">
+          <p className="set-fieldset-title">{t(lang, "settings.modeTitle")}</p>
+          <p className="hint">{t(lang, "settings.modeHint")}</p>
+          <div className="mode-toggle-row">
+            <div className="mode-toggle">
+              <button
+                className={mode === "supabase" ? "active" : ""}
+                onClick={() => onSwitchMode(false)}
+                disabled={mode === "supabase"}
+              >
+                {t(lang, "settings.modeSupabase")}
+              </button>
+              <button
+                className={mode === "local" ? "active" : ""}
+                onClick={() => onSwitchMode(true)}
+                disabled={mode === "local"}
+              >
+                {t(lang, "settings.modeLocal")}
+              </button>
+            </div>
+          </div>
+          <p className="hint">{t(lang, "settings.modeHint")}</p>
         </div>
-        <p className="hint">{t(lang, "settings.connectionNote")}</p>
-        <div className="row actions">
-          <button className="secondary" onClick={onChangeConnection}>
-            {t(lang, "settings.changeConnection")}
-          </button>
-          <button className="secondary" onClick={onLogout}>
-            <IconLogout size={15} />
-            {t(lang, "settings.logout")}
-          </button>
-        </div>
+
+        {mode === "supabase" ? (
+          <>
+            {syncError && (
+              <p className="error" role="alert">
+                Error: {syncError}
+              </p>
+            )}
+            <div className="settings-meta">
+              <p>
+                <span>{t(lang, "settings.connectionCurrent")}</span>
+                <strong>{supabaseUrl || "-"}</strong>
+              </p>
+            </div>
+            <p className="hint">{t(lang, "settings.connectionNote")}</p>
+            <div className="row actions">
+              <button className="secondary" onClick={onChangeConnection}>
+                {t(lang, "settings.changeConnection")}
+              </button>
+              <button className="secondary" onClick={onLogout}>
+                <IconLogout size={15} />
+                {t(lang, "settings.logout")}
+              </button>
+            </div>
+          </>
+) : (
+          // Local mode: password management
+          <div className="local-password-section">
+            <h4 className="set-fieldset-title">{t(lang, "settings.localPassword")}</h4>
+            {localPasswordHash ? (
+              <div className="local-password-set">
+                <p className="info">{t(lang, "settings.localPasswordSet")}</p>
+                <div className="row actions">
+                  <button className="secondary" onClick={() => setShowChangePassword(true)}>
+                    {t(lang, "settings.changeLocalPassword")}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <p className="info warn">{t(lang, "settings.localPasswordNotSet")}</p>
+            )}
+            {showChangePassword && (
+              <div className="overlay">
+                <div className="dialog">
+                  <h4>{t(lang, "settings.changeLocalPassword")}</h4>
+                  <label>
+                    {t(lang, "settings.currentPassword")}
+                    <input
+                      type="password"
+                      value={cpCurrent}
+                      onChange={(e) => setCpCurrent(e.target.value)}
+                      autoFocus
+                    />
+                  </label>
+                  <label>
+                    {t(lang, "settings.newLocalPassword")}
+                    <input type="password" value={cpNew} onChange={(e) => setCpNew(e.target.value)} />
+                  </label>
+                  <label>
+                    {t(lang, "settings.confirmLocalPassword")}
+                    <input type="password" value={cpConfirm} onChange={(e) => setCpConfirm(e.target.value)} />
+                  </label>
+                  {cpError && <p className="error" role="alert">{cpError}</p>}
+                  <div className="row actions">
+                    <button className="secondary" onClick={() => setShowChangePassword(false)}>
+                      {t(lang, "dialog.cancel")}
+                    </button>
+                    <button disabled={cpBusy} onClick={handleChangeLocalPassword}>
+                      {cpBusy ? t(lang, "login.processing") : t(lang, "settings.changeLocalPassword")}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </section>
 
       <section className="set-section" aria-labelledby="set-head-app">

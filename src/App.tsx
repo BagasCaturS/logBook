@@ -25,6 +25,7 @@ import { formatDateTime } from "./lib/dates";
 import { t } from "./lib/i18n";
 import { plainTextFromHtml } from "./lib/richtext";
 import { checkEmailRegistered, getClient, getCurrentSession, onAuthChange, signIn, signOut, signUp } from "./lib/supabase";
+import { createLocalSession, generateUserId, hashPassword, verifyPassword } from "./lib/auth";
 import { deletePhotos, uploadPhoto, type PhotoOps } from "./lib/photos";
 import { loadSettings, normalizeUrl, saveSettings } from "./lib/settings";
 import { syncNow } from "./lib/sync";
@@ -132,21 +133,30 @@ export default function App() {
     });
   }, []);
 
-  // restore session on boot; ikuti perubahan sesi dari client AKTIF. Client
-  // dibuat ulang saat koneksi berubah, jadi listener re-subscribe mengikuti
-  // url+key terkini — mencegah event dari client baru tidak sampai ke UI.
+  // restore session on boot; handle both local & supabase modes
   useEffect(() => {
     let cancelled = false;
     let unsub: (() => void) | undefined;
     (async () => {
       const s = loadSettings();
-      const sess = await getCurrentSession(s);
+      let sess = null;
+      if (s.mode === "local") {
+        // Local mode: create session from local auth
+        const localSess = createLocalSession(s);
+        sess = localSess ? { userId: localSess.userId, email: undefined } : null;
+      } else {
+        // Supabase mode
+        const supaSess = await getCurrentSession(s);
+        sess = supaSess ? { userId: supaSess.user.id, email: supaSess.user.email } : null;
+        if (!cancelled) {
+          unsub = onAuthChange(s, (next) => {
+            setSession(next ? { userId: next.user.id, email: next.user.email } : null);
+          });
+        }
+      }
       if (cancelled) return;
-      setSession(sess ? { userId: sess.user.id, email: sess.user.email } : null);
+      setSession(sess);
       setInitializing(false);
-      unsub = onAuthChange(s, (next) => {
-        setSession(next ? { userId: next.user.id, email: next.user.email } : null);
-      });
     })();
     return () => {
       cancelled = true;
@@ -154,9 +164,9 @@ export default function App() {
       if (syncTimer.current) window.clearTimeout(syncTimer.current);
       if (undoTimer.current) window.clearTimeout(undoTimer.current);
     };
-  }, [settings.supabaseUrl, settings.supabaseAnonKey]);
+  }, [settings.supabaseUrl, settings.supabaseAnonKey, settings.mode]);
 
-  // load entries + categories, start sync loop when session appears
+  // load entries + categories, start sync loop when session appears (supabase only)
   useEffect(() => {
     if (!session) {
       setEntries([]);
@@ -167,9 +177,13 @@ export default function App() {
     void refreshEntries(session.userId);
     void refreshCategories(session.userId);
     void refreshNotes(session.userId);
-    void runSync();
-    const interval = window.setInterval(() => void runSync(), SYNC_INTERVAL_MS);
-    return () => window.clearInterval(interval);
+    const s = settingsRef.current;
+    if (s.mode === "supabase") {
+      void runSync();
+      const interval = window.setInterval(() => void runSync(), SYNC_INTERVAL_MS);
+      return () => window.clearInterval(interval);
+    }
+    return () => {};
   }, [session?.userId, refreshEntries, refreshCategories, refreshNotes, runSync]);
 
   async function handleSaveSetup(url: string, key: string) {
@@ -225,6 +239,66 @@ export default function App() {
 
   async function handleCheckEmail(email: string): Promise<boolean | null> {
     return checkEmailRegistered(settingsRef.current, email);
+  }
+
+  /** Local mode: verifikasi password & buat session lokal */
+  async function handleLocalLogin(password: string): Promise<string | null> {
+    const s = settingsRef.current;
+    if (s.mode !== "local" || !s.localPasswordHash) return t(s.lang, "login.errInvalid");
+    const ok = await verifyPassword(password, s.localPasswordHash);
+    if (!ok) return t(s.lang, "login.wrongPassword");
+    const localUserId = s.localUserId ?? generateUserId();
+    const next = { ...s, localUserId, mode: "local" as const };
+    saveSettings(next);
+    setSettings(next);
+    setSession({ userId: localUserId, isLocal: true } as any);
+    return null;
+  }
+
+  /** Local mode: buat password lokal pertama kali */
+  async function handleCreateLocalPassword(password: string): Promise<string | null> {
+    if (password.length < 6) return t(settings.lang, "settings.passwordTooShort");
+    const s = settingsRef.current;
+    const hash = await hashPassword(password);
+    const localUserId = s.localUserId ?? generateUserId();
+    const next: AppSettings = { ...s, mode: "local", localUserId, localPasswordHash: hash };
+    saveSettings(next);
+    setSettings(next);
+    setSession({ userId: localUserId, isLocal: true } as any);
+    return null;
+  }
+
+  /** Ganti mode: supabase <-> local */
+  async function handleSwitchMode(toLocal: boolean) {
+    const s = settingsRef.current;
+    if (toLocal) {
+      // Switch ke local: reuse Supabase userId jika ada session, atau generate baru
+      const localUserId = session?.userId ?? generateUserId();
+      const next: AppSettings = { ...s, mode: "local", localUserId, localPasswordHash: undefined };
+      saveSettings(next);
+      setSettings(next);
+      setSession(null); // akan trigger login local
+    } else {
+      // Switch ke supabase: hapus local auth, reset ke supabase mode
+      const next: AppSettings = { ...s, mode: "supabase", localUserId: undefined, localPasswordHash: undefined };
+      saveSettings(next);
+      setSettings(next);
+      setSession(null);
+      setConnOpen(true); // buka panel koneksi
+    }
+}
+
+  /** Ganti password lokal (dipanggil dari SettingsView) */
+  async function handleChangeLocalPassword(current: string, newPass: string): Promise<string | null> {
+    const s = settingsRef.current;
+    if (s.mode !== "local" || !s.localPasswordHash) return t(s.lang, "login.errInvalid");
+    const ok = await verifyPassword(current, s.localPasswordHash);
+    if (!ok) return t(s.lang, "settings.wrongCurrentPassword");
+    const newHash = await hashPassword(newPass);
+    const next: AppSettings = { ...s, localPasswordHash: newHash };
+    saveSettings(next);
+    setSettings(next);
+    return null;
   }
 
   async function handleSaveEntry(input: EntryInput, id: string | null, photoOps: PhotoOps) {
@@ -382,7 +456,8 @@ export default function App() {
 
   if (initializing) return <div className="setup">{t(settings.lang, "app.loading")}</div>;
 
-  if (!settings.supabaseUrl || !settings.supabaseAnonKey) {
+  // Supabase mode: show Setup if credentials not configured
+  if (settings.mode === "supabase" && (!settings.supabaseUrl || !settings.supabaseAnonKey)) {
     return (
       <Setup
         initialUrl={settings.supabaseUrl}
@@ -397,6 +472,7 @@ export default function App() {
     return (
       <Login
         lang={settings.lang}
+        mode={settings.mode}
         initialUrl={settings.supabaseUrl}
         initialKey={settings.supabaseAnonKey}
         connOpen={connOpen}
@@ -404,6 +480,9 @@ export default function App() {
         onChangeConnection={(url, key) => void handleChangeConnection(url, key)}
         onCheckEmail={handleCheckEmail}
         onLogin={handleLogin}
+        onLocalLogin={handleLocalLogin}
+        onCreateLocalPassword={handleCreateLocalPassword}
+        onSwitchMode={handleSwitchMode}
       />
     );
   }
@@ -489,6 +568,9 @@ export default function App() {
           hourStart={settings.hourStart}
           hourLabel={settings.hourLabel}
           supabaseUrl={settings.supabaseUrl}
+          mode={settings.mode}
+          localPasswordHash={settings.localPasswordHash}
+          _localUserId={settings.localUserId}
           updateInfo={updateInfo}
           updateState={updateState}
           updateError={updateError}
@@ -529,6 +611,9 @@ export default function App() {
           onChangeConnection={() => void handleOpenChangeConnection()}
           onLogout={() => void handleLogout()}
           onBack={() => setView("main")}
+          onSwitchMode={handleSwitchMode}
+          onChangeLocalPassword={handleChangeLocalPassword}
+          _onCreateLocalPassword={handleCreateLocalPassword}
         />
       ) : (
         <main>
