@@ -15,6 +15,19 @@ Aplikasi logbook harian (tugas praktik / kegiatan harian) berbasis **Tauri + Rea
 - **Backup & restore** — ekspor JSON seluruh data lokal, impor kembali.
 - **Ekspor PDF** — rekap per periode dengan header (nama, jurusan, instansi).
 - **Gelap/terang otomatis** dan 4 tema warna; UI dalam bahasa Indonesia dan Inggris.
+- **Mode Lokal Saja (Offline)** — jalankan penuh tanpa Supabase:
+  - Autentikasi password lokal (PBKDF2-SHA256, 100k iterasi via Web Crypto)
+  - Data 100% di SQLite lokal (termasuk foto sebagai Base64)
+  - Tanpa internet, tanpa project Supabase
+  - Switch mode di Settings: Supabase ↔ Lokal Saja
+- **Halaman Login Modern** — UI redesign:
+  - Toggle mode Supabase ↔ Lokal di halaman login
+  - Show/hide password
+  - Validasi email inline (checking/available/taken)
+  - Hint kekuatan password (min 6 karakter)
+  - Animasi halus, loading spinner, focus states
+  - Aksesibilitas: ARIA labels, keyboard navigation
+- **Manajemen Password Lokal** — ubah password lokal, status password di Settings
 
 ## Teknologi
 
@@ -86,6 +99,19 @@ A daily logbook app (internship / daily activities) built with **Tauri + React +
 - **Backup & restore** — export all local data as JSON, import it back.
 - **PDF export** — period recap with header (name, major, institution).
 - **Auto light/dark mode** and 4 color themes; UI in Indonesian and English.
+- **Local-Only Mode (Offline)** — run fully without Supabase:
+  - Local password auth (PBKDF2-SHA256, 100k iterations via Web Crypto)
+  - 100% local SQLite storage (including photos as Base64)
+  - No internet, no Supabase project required
+  - Switch modes in Settings: Supabase ↔ Local Only
+- **Modern Login Page** — redesigned UI:
+  - Supabase ↔ Local toggle on login screen
+  - Show/hide password
+  - Inline email validation (checking/available/taken)
+  - Password strength hint (min 6 chars)
+  - Smooth animations, loading spinner, focus states
+  - Accessibility: ARIA labels, keyboard navigation
+- **Local Password Management** — change local password, view password status in Settings
 
 ## Tech Stack
 
