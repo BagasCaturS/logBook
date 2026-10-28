@@ -26,7 +26,7 @@ import { t } from "./lib/i18n";
 import { plainTextFromHtml } from "./lib/richtext";
 import { checkEmailRegistered, getClient, getCurrentSession, onAuthChange, signIn, signOut, signUp } from "./lib/supabase";
 import { createLocalSession, generateUserId, hashPassword, verifyPassword } from "./lib/auth";
-import { deletePhotos, uploadPhoto, type PhotoOps } from "./lib/photos";
+import { deletePhotos, getPhotoUrl, isLocalPhoto, savePhotoLocal, uploadPhoto, type PhotoOps } from "./lib/photos";
 import { loadSettings, normalizeUrl, saveSettings } from "./lib/settings";
 import { syncNow } from "./lib/sync";
 import { DEFAULT_THEME } from "./lib/themes";
@@ -97,6 +97,7 @@ export default function App() {
   }, []);
 
   const runSync = useCallback(async () => {
+    if (settingsRef.current.mode !== "supabase") return;
     if (syncInFlight.current) return;
     syncInFlight.current = true;
     try {
@@ -111,6 +112,7 @@ export default function App() {
   }, [session]);
 
   const queueSync = useCallback(() => {
+    if (settingsRef.current.mode !== "supabase") return;
     if (syncTimer.current) window.clearTimeout(syncTimer.current);
     syncTimer.current = window.setTimeout(() => {
       void runSync();
@@ -141,8 +143,8 @@ export default function App() {
       const s = loadSettings();
       let sess = null;
       if (s.mode === "local") {
-        // Local mode: create session from local auth
-        const localSess = createLocalSession(s);
+        // Local mode: auto-login only when the user opted in and a password exists
+        const localSess = s.localRemember && s.localPasswordHash ? createLocalSession(s) : null;
         sess = localSess ? { userId: localSess.userId, email: undefined } : null;
       } else {
         // Supabase mode
@@ -242,13 +244,13 @@ export default function App() {
   }
 
   /** Local mode: verifikasi password & buat session lokal */
-  async function handleLocalLogin(password: string): Promise<string | null> {
+  async function handleLocalLogin(password: string, remember: boolean): Promise<string | null> {
     const s = settingsRef.current;
     if (s.mode !== "local" || !s.localPasswordHash) return t(s.lang, "login.errInvalid");
     const ok = await verifyPassword(password, s.localPasswordHash);
     if (!ok) return t(s.lang, "login.wrongPassword");
     const localUserId = s.localUserId ?? generateUserId();
-    const next = { ...s, localUserId, mode: "local" as const };
+    const next = { ...s, localUserId, mode: "local" as const, localRemember: remember };
     saveSettings(next);
     setSettings(next);
     setSession({ userId: localUserId, isLocal: true } as any);
@@ -256,12 +258,19 @@ export default function App() {
   }
 
   /** Local mode: buat password lokal pertama kali */
-  async function handleCreateLocalPassword(password: string): Promise<string | null> {
+  async function handleCreateLocalPassword(password: string, remember: boolean): Promise<string | null> {
     if (password.length < 6) return t(settings.lang, "settings.passwordTooShort");
     const s = settingsRef.current;
+    if (s.localPasswordHash) return t(s.lang, "settings.localPasswordExists");
     const hash = await hashPassword(password);
     const localUserId = s.localUserId ?? generateUserId();
-    const next: AppSettings = { ...s, mode: "local", localUserId, localPasswordHash: hash };
+    const next: AppSettings = {
+      ...s,
+      mode: "local",
+      localUserId,
+      localPasswordHash: hash,
+      localRemember: remember,
+    };
     saveSettings(next);
     setSettings(next);
     setSession({ userId: localUserId, isLocal: true } as any);
@@ -271,20 +280,19 @@ export default function App() {
   /** Ganti mode: supabase <-> local */
   async function handleSwitchMode(toLocal: boolean) {
     const s = settingsRef.current;
+    if (toLocal === (s.mode === "local")) return;
     if (toLocal) {
-      // Switch ke local: reuse Supabase userId jika ada session, atau generate baru
-      const localUserId = session?.userId ?? generateUserId();
-      const next: AppSettings = { ...s, mode: "local", localUserId, localPasswordHash: undefined };
-      saveSettings(next);
-      setSettings(next);
-      setSession(null); // akan trigger login local
-    } else {
-      // Switch ke supabase: hapus local auth, reset ke supabase mode
-      const next: AppSettings = { ...s, mode: "supabase", localUserId: undefined, localPasswordHash: undefined };
+      const localUserId = s.localUserId ?? session?.userId ?? generateUserId();
+      const next: AppSettings = { ...s, mode: "local", localUserId, localRemember: false };
       saveSettings(next);
       setSettings(next);
       setSession(null);
-      setConnOpen(true); // buka panel koneksi
+    } else {
+      const next: AppSettings = { ...s, mode: "supabase", localRemember: false };
+      saveSettings(next);
+      setSettings(next);
+      setSession(null);
+      setConnOpen(true);
     }
 }
 
@@ -304,26 +312,28 @@ export default function App() {
   async function handleSaveEntry(input: EntryInput, id: string | null, photoOps: PhotoOps) {
     if (!session) return;
     const s = settingsRef.current;
-    const client = getClient(s);
+    const local = s.mode === "local";
+    const client = local ? null : getClient(s);
     const removed = photoOps?.removed ?? [];
     const added = photoOps?.added ?? [];
-    if (removed.length > 0 && client) {
-      await deletePhotos(client, removed);
-    }
     const newPaths: string[] = [];
-    if (added.length > 0) {
-      if (!client) throw new Error("Supabase belum dikonfigurasi");
-      for (const f of added) {
+    for (const f of added) {
+      if (local) {
+        newPaths.push(await savePhotoLocal(f));
+      } else {
+        if (!client) throw new Error("Supabase belum dikonfigurasi");
         newPaths.push(await uploadPhoto(client, session.userId, f));
       }
     }
-    const base = id ? (editing?.photo_paths ?? []) : [];
-    const photoPaths = [...base.filter((p) => !removed.includes(p)), ...newPaths];
+    const photoPaths = [...(input.photo_paths ?? []), ...newPaths];
     const fullInput: EntryInput = { ...input, photo_paths: photoPaths };
     if (id) {
       await updateEntry(id, session.userId, fullInput);
     } else {
       await addEntry(session.userId, fullInput);
+    }
+    if (!local && client) {
+      await deletePhotos(client, removed.filter((p) => !isLocalPhoto(p)));
     }
     await refreshEntries(session.userId);
     setEditing(null);
@@ -396,9 +406,10 @@ export default function App() {
     undoTimer.current = window.setTimeout(() => {
       undoTimer.current = null;
       setUndoEntry(null);
-      const client = getClient(settingsRef.current);
+      const s = settingsRef.current;
+      const client = s.mode === "supabase" ? getClient(s) : null;
       if (client && paths.length > 0) {
-        void deletePhotos(client, paths);
+        void deletePhotos(client, paths.filter((p) => !isLocalPhoto(p)));
       }
     }, 10_000);
   }
@@ -427,7 +438,14 @@ export default function App() {
   }
 
   async function handleLogout() {
-    await signOut(settingsRef.current);
+    const s = settingsRef.current;
+    if (s.mode === "local") {
+      const next = { ...s, localRemember: false };
+      saveSettings(next);
+      setSettings(next);
+    } else {
+      await signOut(s);
+    }
     setSession(null);
     setView("main");
   }
@@ -453,6 +471,8 @@ export default function App() {
       setUpdateError(e instanceof Error ? e.message : String(e));
     }
   }
+
+  const resolvePhoto = (path: string) => getPhotoUrl(settings, path);
 
   if (initializing) return <div className="setup">{t(settings.lang, "app.loading")}</div>;
 
@@ -483,6 +503,8 @@ export default function App() {
         onLocalLogin={handleLocalLogin}
         onCreateLocalPassword={handleCreateLocalPassword}
         onSwitchMode={handleSwitchMode}
+        hasLocalPassword={Boolean(settings.localPasswordHash)}
+        localRemember={Boolean(settings.localRemember)}
       />
     );
   }
@@ -570,7 +592,6 @@ export default function App() {
           supabaseUrl={settings.supabaseUrl}
           mode={settings.mode}
           localPasswordHash={settings.localPasswordHash}
-          _localUserId={settings.localUserId}
           updateInfo={updateInfo}
           updateState={updateState}
           updateError={updateError}
@@ -613,7 +634,6 @@ export default function App() {
           onBack={() => setView("main")}
           onSwitchMode={handleSwitchMode}
           onChangeLocalPassword={handleChangeLocalPassword}
-          _onCreateLocalPassword={handleCreateLocalPassword}
         />
       ) : (
         <main>
@@ -643,7 +663,7 @@ export default function App() {
             editing={editing}
             initialDate={formDate}
             categories={categories}
-            supabaseUrl={settings.supabaseUrl}
+            resolvePhoto={resolvePhoto}
             lang={lang}
             onSave={handleSaveEntry}
             onCreateCategory={handleCreateCategory}
@@ -659,7 +679,7 @@ export default function App() {
             notes={notes}
             startDate={settings.startDate}
             leavingId={leavingId}
-            supabaseUrl={settings.supabaseUrl}
+            resolvePhoto={resolvePhoto}
             lang={lang}
             hourLabel={settings.hourLabel}
             onSaveNote={(tanggal, isi) => void handleSaveNote(tanggal, isi)}
@@ -679,7 +699,7 @@ export default function App() {
             entries={entries}
             categories={categories}
             leavingId={leavingId}
-            supabaseUrl={settings.supabaseUrl}
+            resolvePhoto={resolvePhoto}
             lang={lang}
             hourLabel={settings.hourLabel}
             onEdit={(e) => {

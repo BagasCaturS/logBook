@@ -16,3 +16,11 @@ export function localNewerThan(
 ): boolean {
   return parseTs(localUpdatedAt) > parseTs(remoteUpdatedAt);
 }
+
+export const PHOTO_DELETE_GRACE_MS = 15_000;
+
+/** Tombstone yang masih dalam masa undo tidak boleh menghapus fotonya. */
+export function shouldDeletePhotos(updatedAt: string | null, now = Date.now()): boolean {
+  const ts = parseTs(updatedAt);
+  return ts > 0 && now - ts >= PHOTO_DELETE_GRACE_MS;
+}

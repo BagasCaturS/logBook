@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { Category, EntryInput, LogbookEntry } from "../lib/types";
 import { computeMinggu, hoursElapsed, todayIso } from "../lib/dates";
 import { t, type Lang } from "../lib/i18n";
-import { MAX_PHOTOS, isBigFile, photoUrl, type PhotoOps } from "../lib/photos";
+import { MAX_PHOTOS, isBigFile, type PhotoOps } from "../lib/photos";
 import { errMessage } from "../lib/sync";
 import { plainTextFromHtml, sanitizeHtml } from "../lib/richtext";
 import RichEditor from "./RichEditor";
@@ -14,7 +14,7 @@ interface Props {
   editing: LogbookEntry | null;
   initialDate?: string | null;
   categories: Category[];
-  supabaseUrl: string;
+  resolvePhoto: (path: string) => string;
   lang: Lang;
   onSave: (input: EntryInput, id: string | null, photoOps: PhotoOps) => Promise<void>;
   onCreateCategory: (name: string) => Promise<Category | undefined>;
@@ -28,7 +28,7 @@ export default function EntryForm({
   editing,
   initialDate,
   categories,
-  supabaseUrl,
+  resolvePhoto,
   lang,
   onSave,
   onCreateCategory,
@@ -313,7 +313,7 @@ export default function EntryForm({
           <div className="photo-grid form-photos">
             {keptPaths.map((p) => (
               <div key={p} className="photo-item">
-                <img src={photoUrl(supabaseUrl, p)} alt="" loading="lazy" />
+                <img src={resolvePhoto(p)} alt="" loading="lazy" />
                 <button
                   type="button"
                   className="photo-x"

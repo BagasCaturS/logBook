@@ -9,20 +9,24 @@ import {
   getDirtySettingsRows,
   getEntry,
   getSettingsRow,
+  listDeletedEntriesSince,
   listEntries,
+  listEntriesWithLocalPhotos,
   markCategoryClean,
   markClean,
   markNoteClean,
   markSettingsClean,
+  updateEntry,
   upsertCategoryLocal,
   upsertLocal,
   upsertNoteLocal,
   upsertSettingsLocal,
   type SettingsSyncRow,
 } from "./db";
-import { cleanupOrphanPhotos, deletePhotos } from "./photos";
+import { noteIdFor } from "./notes";
+import { cleanupOrphanPhotos, deletePhotos, isLocalPhoto, uploadLocalPhoto } from "./photos";
 import { applyRemoteSettings, saveSettings } from "./settings";
-import { localNewerThan, parseTs } from "./syncLogic";
+import { localNewerThan, parseTs, PHOTO_DELETE_GRACE_MS, shouldDeletePhotos } from "./syncLogic";
 import type {
   AppSettings,
   Category,
@@ -80,8 +84,9 @@ function toLocalCategory(r: RemoteCategory, userId: string): Category {
 }
 
 function toLocalNote(r: RemoteDailyNote, userId: string): DailyNote {
+  const legacyId = `note-${r.tanggal}`;
   return {
-    id: r.id,
+    id: r.id === legacyId ? noteIdFor(userId, r.tanggal) : r.id,
     user_id: userId,
     tanggal: (r.tanggal ?? "").slice(0, 10),
     isi: r.isi ?? "",
@@ -121,6 +126,11 @@ interface TableAdapter<TLocal> {
  * One push+pull cycle for a table, sharing the sync watermark.
  * Returns the newest updated_at seen remotely (0 if nothing pulled).
  */
+interface SyncTableResult {
+  maxTs: number;
+  blocked: boolean;
+}
+
 async function syncTable<TLocal>(
   client: SupabaseClient,
   table: string,
@@ -128,7 +138,7 @@ async function syncTable<TLocal>(
   watermark: string,
   getDirty: (userId: string) => Promise<TLocal[]>,
   adapter: TableAdapter<TLocal>
-): Promise<number> {
+): Promise<SyncTableResult> {
   // ---- PUSH local dirty rows ----
   const dirty = await getDirty(userId);
   if (dirty.length > 0) {
@@ -198,6 +208,7 @@ async function syncTable<TLocal>(
   }
 
   let maxRemoteTs = 0;
+  let blocked = false;
   const pullKeyCol = adapter.remoteKeyColumn ?? "id";
   for (const r of rows) {
     const updated = parseTs(String(r.updated_at ?? ""));
@@ -206,15 +217,21 @@ async function syncTable<TLocal>(
     const local = await adapter.getLocal(id, userId);
     // Guard LWW: skip hanya jika lokal benar-benar LEBIH BARU. Baris dengan
     // timestamp sama dengan remote (di-pull oleh versi klien lama yang belum
-    // mengenal kolom fitur baru) tetap di-re-pull, sehingga kolom baru
-    // (jam, category_ids, photo_paths, ...) ikut terisi setelah update.
+    // mengisi kolom baru) tetap diterapkan, sehingga perangkat lama tertarik
+    // ke versi terbaru.
     if (local && localNewerThan(adapter.touchedAt(local), String(r.updated_at ?? ""))) continue;
     if (r.deleted && local && adapter.onRemoteDelete) {
+      // Jangan majukan watermark melewati tombstone yang masih dalam masa undo,
+      // supaya sync berikutnya tetap bisa menerapkannya setelah grace period.
+      if (!shouldDeletePhotos(String(r.updated_at ?? ""))) {
+        blocked = true;
+        continue;
+      }
       await adapter.onRemoteDelete(local, client);
     }
     await adapter.upsertLocal(adapter.fromRemote(r, userId));
   }
-  return maxRemoteTs;
+  return { maxTs: maxRemoteTs, blocked };
 }
 
 const entryAdapter: TableAdapter<LogbookEntry> = {
@@ -231,7 +248,7 @@ const entryAdapter: TableAdapter<LogbookEntry> = {
     hari_ke: e.hari_ke,
     jam: e.jam ?? null,
     category_ids: JSON.stringify(e.category_ids ?? []),
-    photo_paths: JSON.stringify(e.photo_paths ?? []),
+    photo_paths: JSON.stringify((e.photo_paths ?? []).filter((p) => !isLocalPhoto(p))),
     created_at: e.created_at,
     updated_at: e.updated_at,
     // 1/0 works for both BOOLEAN and INTEGER columns in PostgreSQL
@@ -241,7 +258,8 @@ const entryAdapter: TableAdapter<LogbookEntry> = {
   touchedAt: (e) => e.updated_at,
   idOf: (e) => e.id,
   onRemoteDelete: async (e, client) => {
-    const paths = e.photo_paths ?? [];
+    if (!shouldDeletePhotos(e.updated_at)) return;
+    const paths = (e.photo_paths ?? []).filter((p) => !isLocalPhoto(p));
     if (paths.length > 0) await deletePhotos(client, paths);
   },
   // pull penuh tiap sync: baris yang `updated_at`-nya lebih tua dari
@@ -340,6 +358,22 @@ const settingsAdapter: TableAdapter<SettingsSyncRow> = {
   fullPull: true,
 };
 
+async function migrateLocalPhotos(client: SupabaseClient, userId: string): Promise<void> {
+  let failed: unknown;
+  for (const entry of await listEntriesWithLocalPhotos(userId)) {
+    try {
+      const paths: string[] = [];
+      for (const path of entry.photo_paths ?? []) {
+        paths.push(isLocalPhoto(path) ? await uploadLocalPhoto(client, userId, path) : path);
+      }
+      await updateEntry(entry.id, userId, { photo_paths: paths });
+    } catch (e) {
+      failed = e;
+    }
+  }
+  if (failed) throw failed;
+}
+
 /**
  * One sync cycle: push local dirty rows, then pull remote changes since the
  * last watermark (full table for fullPull adapters). Last-write-wins on
@@ -352,7 +386,7 @@ export async function syncNow(
   settings: AppSettings,
   onStatus: (s: SyncStatus) => void
 ): Promise<SyncStatus> {
-  if (!client || !userId) {
+  if (!client || !userId || settings.mode !== "supabase") {
     const status: SyncStatus = { state: "offline", lastSyncAt: settings.lastSyncAt };
     onStatus(status);
     return status;
@@ -361,16 +395,22 @@ export async function syncNow(
   onStatus({ state: "syncing", lastSyncAt: settings.lastSyncAt });
 
   try {
+    await migrateLocalPhotos(client, userId);
     const watermark = settings.lastSyncAt ?? "1970-01-01T00:00:00.000Z";
-    const [entryTs, catTs, noteTs, settingsTs] = await Promise.all([
+    const results = await Promise.all([
       syncTable(client, "logbook_entries", userId, watermark, getDirtyEntries, entryAdapter),
       syncTable(client, "categories", userId, watermark, getDirtyCategories, categoryAdapter),
       syncTable(client, "daily_notes", userId, watermark, getDirtyNotes, dailyNoteAdapter),
       syncTable(client, "app_settings", userId, watermark, getDirtySettingsRows, settingsAdapter),
     ]);
 
-    const maxRemoteTs = Math.max(entryTs, catTs, noteTs, settingsTs);
-    const newWatermark = maxRemoteTs > 0 ? new Date(maxRemoteTs).toISOString() : settings.lastSyncAt;
+    const blocked = results.some((r) => r.blocked);
+    const maxRemoteTs = Math.max(...results.map((r) => r.maxTs));
+    const newWatermark = blocked
+      ? settings.lastSyncAt ?? watermark
+      : maxRemoteTs > 0
+        ? new Date(maxRemoteTs).toISOString()
+        : settings.lastSyncAt;
     const nextSettings: AppSettings = { ...settings, lastSyncAt: newWatermark };
     saveSettings(nextSettings);
 
@@ -385,7 +425,13 @@ export async function syncNow(
     // Kegagalan di sini tidak menggagalkan sinkronisasi.
     try {
       const live = await listEntries(userId);
-      const referenced = new Set(live.flatMap((e) => e.photo_paths ?? []));
+      const recent = await listDeletedEntriesSince(
+        userId,
+        new Date(Date.now() - PHOTO_DELETE_GRACE_MS).toISOString()
+      );
+      const referenced = new Set(
+        [...live, ...recent].flatMap((e) => e.photo_paths ?? [])
+      );
       await cleanupOrphanPhotos(client, userId, referenced);
     } catch {
       // abaikan

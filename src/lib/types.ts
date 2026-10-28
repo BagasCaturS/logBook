@@ -38,7 +38,7 @@ export interface Category {
 }
 
 export interface DailyNote {
-  id: string; // `note-<tanggal>` — deterministic agar LWW antar device aman
+  id: string; // `note-<user>-<tanggal>` — deterministic agar LWW antar device aman
   user_id: string;
   tanggal: string; // YYYY-MM-DD (local date)
   isi: string; // plain text
@@ -83,6 +83,7 @@ export interface AppSettings {
   mode: "supabase" | "local";        // default "supabase"
   localUserId?: string;              // UUID dari Supabase (reuse saat switch)
   localPasswordHash?: string;        // hash password local (salt:hash hex)
+  localRemember?: boolean;           // auto-login mode lokal (opt-in)
 }
 
 export type SyncState = "online" | "offline" | "syncing" | "error";

@@ -22,9 +22,11 @@ interface Props {
   onChangeConnection: (url: string, key: string) => void;
   onCheckEmail: (email: string) => Promise<boolean | null>;
   onLogin: (email: string, password: string, mode: "login" | "signup") => Promise<string | null>;
-  onLocalLogin: (password: string) => Promise<string | null>;
-  onCreateLocalPassword: (password: string) => Promise<string | null>;
+  onLocalLogin: (password: string, remember: boolean) => Promise<string | null>;
+  onCreateLocalPassword: (password: string, remember: boolean) => Promise<string | null>;
   onSwitchMode: (toLocal: boolean) => Promise<void>;
+  hasLocalPassword: boolean;
+  localRemember: boolean;
 }
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -42,6 +44,8 @@ export default function Login({
   onLocalLogin,
   onCreateLocalPassword,
   onSwitchMode,
+  hasLocalPassword,
+  localRemember,
 }: Props) {
   // Supabase mode state
   const [email, setEmail] = useState("");
@@ -55,7 +59,10 @@ export default function Login({
   const emailTimer = useRef<number | null>(null);
 
   // Local mode state
-  const [localMode, setLocalMode] = useState<"login" | "createPassword" | "changePassword">("login");
+  const [localMode] = useState<"login" | "createPassword" | "changePassword">(
+    hasLocalPassword ? "login" : "createPassword"
+  );
+  const [rememberLocal, setRememberLocal] = useState(localRemember);
   const [localPassword, setLocalPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [localError, setLocalError] = useState<string | null>(null);
@@ -133,7 +140,7 @@ export default function Login({
       setLocalError(null);
       setLocalInfo(null);
       try {
-        const err = await onCreateLocalPassword(localPassword);
+        const err = await onCreateLocalPassword(localPassword, rememberLocal);
         if (err) setLocalError(err);
         else setLocalInfo(t(lang, "settings.passwordChanged"));
       } finally {
@@ -151,21 +158,11 @@ export default function Login({
     setLocalError(null);
     setLocalInfo(null);
     try {
-      const err = await onLocalLogin(localPassword);
+      const err = await onLocalLogin(localPassword, rememberLocal);
       if (err) setLocalError(err);
     } finally {
       setLocalBusy(false);
     }
-  }
-
-  function switchLocalMode(newMode: "login" | "createPassword" | "changePassword") {
-    setLocalMode(newMode);
-    setLocalError(null);
-    setLocalInfo(null);
-    setLocalPassword("");
-    setConfirmPassword("");
-    setShowLocalPassword(false);
-    setShowConfirmPassword(false);
   }
 
   const isSupabaseMode = mode === "supabase";
@@ -179,7 +176,7 @@ export default function Login({
             type="button"
             className={`mode-btn ${mode === "supabase" ? "active" : ""}`}
             onClick={() => void onSwitchMode(false)}
-            disabled={busy || localBusy}
+            disabled={busy || localBusy || mode === "supabase"}
             aria-pressed={mode === "supabase"}
           >
             <IconCloud size={18} />
@@ -190,7 +187,7 @@ export default function Login({
             type="button"
             className={`mode-btn ${mode === "local" ? "active" : ""}`}
             onClick={() => void onSwitchMode(true)}
-            disabled={busy || localBusy}
+            disabled={busy || localBusy || mode === "local"}
             aria-pressed={mode === "local"}
           >
             <IconDatabase size={18} />
@@ -444,6 +441,15 @@ export default function Login({
                     </div>
                   </div>
 
+                  <label className="checkbox-wrapper">
+                    <input
+                      type="checkbox"
+                      checked={rememberLocal}
+                      onChange={(e) => setRememberLocal(e.target.checked)}
+                    />
+                    <span>{t(lang, "login.rememberMe")}</span>
+                  </label>
+
                   {localError && (
                     <div className="alert error" role="alert">
                       {localError}
@@ -611,6 +617,15 @@ export default function Login({
                     </div>
                   </div>
 
+                  <label className="checkbox-wrapper">
+                    <input
+                      type="checkbox"
+                      checked={rememberLocal}
+                      onChange={(e) => setRememberLocal(e.target.checked)}
+                    />
+                    <span>{t(lang, "login.rememberMe")}</span>
+                  </label>
+
                   {localError && (
                     <div className="alert error" role="alert">
                       {localError}
@@ -636,24 +651,9 @@ export default function Login({
               )}
 
               <div className="local-actions">
-                {localMode === "login" && (
-                  <>
-                    <button type="button" className="link" onClick={() => switchLocalMode("createPassword")}>
-                      {t(lang, "login.createPassword")}
-                    </button>
-                    <button type="button" className="link" onClick={() => void onSwitchMode(false)}>
-                      <IconArrowRight size={14} /> {t(lang, "login.supabaseSwitch")}
-                    </button>
-                  </>
-                )}
-                {localMode === "createPassword" && (
-                  <button type="button" className="link" onClick={() => switchLocalMode("login")}>
-                    <IconArrowRight size={14} /> {t(lang, "login.title")}
-                  </button>
-                )}
-                {localMode === "changePassword" && (
-                  <button type="button" className="link" onClick={() => switchLocalMode("login")}>
-                    <IconArrowRight size={14} /> {t(lang, "login.title")}
+                {localMode !== "changePassword" && (
+                  <button type="button" className="link" onClick={() => void onSwitchMode(false)}>
+                    <IconArrowRight size={14} /> {t(lang, "login.supabaseSwitch")}
                   </button>
                 )}
               </div>

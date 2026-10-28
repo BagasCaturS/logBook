@@ -30,7 +30,7 @@ interface Props {
   notes: DailyNote[];
   startDate: string;
   leavingId?: string | null;
-  supabaseUrl: string;
+  resolvePhoto: (path: string) => string;
   lang: Lang;
   hourLabel: string;
   onAdd: (date: string) => void;
@@ -46,7 +46,7 @@ export default function CalendarView({
   notes,
   startDate,
   leavingId,
-  supabaseUrl,
+  resolvePhoto,
   lang,
   hourLabel,
   onAdd,
@@ -230,7 +230,7 @@ export default function CalendarView({
                         })}
                       </div>
                     )}
-                    <PhotoThumbs paths={e.photo_paths ?? []} supabaseUrl={supabaseUrl} onOpen={onOpenPhoto} />
+                    <PhotoThumbs paths={e.photo_paths ?? []} resolvePhoto={resolvePhoto} onOpen={onOpenPhoto} />
                   </div>
                 </div>
               </li>

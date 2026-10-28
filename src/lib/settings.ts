@@ -23,6 +23,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   mode: "supabase",          // "supabase" | "local"
   localUserId: undefined,
   localPasswordHash: undefined,
+  localRemember: false,
 };
 
 export function normalizeUrl(url: string): string {
@@ -55,6 +56,7 @@ export function normalizeSettings(stored: Partial<AppSettings>): AppSettings {
     mode: stored.mode === "local" ? "local" : "supabase",
     localUserId: stored.localUserId ?? undefined,
     localPasswordHash: stored.localPasswordHash ?? undefined,
+    localRemember: stored.localRemember === true,
   };
   return base as AppSettings;
 }
