@@ -273,8 +273,8 @@ const dict: Record<string, { id: string; en: string }> = {
   "backup.confirmTitle": { id: "Pulihkan cadangan?", en: "Restore backup?" },
   "backup.confirm": { id: "Pulihkan", en: "Restore" },
   "backup.confirmText": {
-    id: "Data lokal akan digabung dengan isi cadangan (versi yang lebih baru menang). Lanjutkan?",
-    en: "Local data will be merged with the backup content (newest version wins). Continue?",
+    id: "Data cadangan akan dipulihkan dan menimpa perubahan cloud yang lebih baru. Lanjutkan?",
+    en: "Backup data will be restored and will overwrite newer cloud changes. Continue?",
   },
 
   // photos
@@ -380,6 +380,7 @@ const dict: Record<string, { id: string; en: string }> = {
   "settings.localPassword": { id: "Password Lokal", en: "Local Password" },
   "settings.localPasswordSet": { id: "Password sudah diatur", en: "Password is set" },
   "settings.localPasswordNotSet": { id: "Belum ada password — atur di bawah", en: "No password set — set below" },
+  "settings.localPasswordExists": { id: "Password lokal sudah ada", en: "Local password already exists" },
   "settings.changeLocalPassword": { id: "Ganti Password Lokal", en: "Change Local Password" },
   "settings.newLocalPassword": { id: "Password Baru", en: "New Password" },
   "settings.confirmLocalPassword": { id: "Konfirmasi Password Baru", en: "Confirm New Password" },
@@ -400,7 +401,6 @@ const dict: Record<string, { id: string; en: string }> = {
   "login.modeToggle": { id: "Mode:", en: "Mode:" },
 
   // Enhanced login
-  "login.forgotPassword": { id: "Lupa password?", en: "Forgot password?" },
   "login.rememberMe": { id: "Ingat saya", en: "Remember me" },
   "login.showPassword": { id: "Tampilkan password", en: "Show password" },
   "login.hidePassword": { id: "Sembunyikan password", en: "Hide password" },

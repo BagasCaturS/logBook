@@ -1,3 +1,3 @@
-export function noteIdFor(tanggal: string): string {
-  return `note-${tanggal}`;
+export function noteIdFor(userId: string, tanggal: string): string {
+  return `note-${userId}-${tanggal}`;
 }

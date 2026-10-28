@@ -3,6 +3,45 @@
 Semua perubahan penting pada Online Logbook dicatat di sini.
 Format mengikuti pola `[Versi] - Tanggal`; setiap entri mencatat tambahan (Added), perbaikan (Fixed), dan catatan migrasi (Migration).
 
+## [0.11.0] - 2026-10-28
+
+### Fixed
+- **Tampilan tidak ikut sync** — hasil sync otomatis langsung memperbarui daftar entri, kategori, dan catatan.
+- **Foto perangkat lain ikut terhapus** — pembersihan foto yatim menunggu umur file 1 jam.
+- **Balapan inisialisasi database** — `ensureDb` memakai satu promise bersama saat pertama dibuka.
+- **Push menimpa data lebih baru** — trigger `ignore_stale_updates` menolak update dengan `updated_at` lebih lama.
+- **Baris terlewat saat pull lebih dari 1000** — pagination memakai `range` dengan urutan `updated_at, id`.
+- **Foto cloud tidak tampil di mode lokal** — foto disalin ke Base64 saat beralih mode; placeholder bila gagal.
+- **Status sync menyesatkan** — watermark dipisah dari `lastSyncAt`, jadi waktu sync yang tampil adalah waktu sebenarnya.
+- **Tanggal PDF memakai UTC** — header PDF kini memakai tanggal lokal.
+- **Tombstone menumpuk** — dibersihkan otomatis (30 hari untuk cloud, 1 menit untuk mode lokal).
+- **Kontrol login mati** — "Ingat saya"/"Lupa password" (Supabase) dan cabang ganti password yang tidak terpakai dihapus.
+
+### Migration
+- Jalankan ulang `docs/supabase-setup.sql` untuk mengaktifkan trigger anti-clobber. File `supabase/schema.sql` lama dihapus.
+
+## [0.10.1] - 2026-10-28
+
+### Added
+- **Remember me mode lokal** — opsional, default mati; sesi lokal tidak lagi otomatis login setelah aplikasi dibuka ulang.
+- **Migrasi foto lokal saat pindah ke Supabase** — foto Base64 diunggah ke Storage bila profil lokal dan akun Supabase yang login memakai ID yang sama.
+
+### Fixed
+- **Keamanan HTML** — DOMPurify, Tiptap, dan Vite diperbarui; sanitasi tetap ketat untuk konten dari sinkronisasi.
+- **Bypass login lokal** — mode lokal hanya auto-login bila "Remember me" dipilih.
+- **Foto lokal rusak** — path Base64 baru `local:<base64>` dan decoder kompatibel dengan format lama.
+- **Foto hilang saat undo** — penghapusan foto cloud ditunda 15 detik, lebih lama dari jendela undo 10 detik.
+- **Foto hilang saat simpan gagal** — foto yang dihapus baru dibersihkan setelah entri berhasil disimpan.
+- **Restore kalah dari data cloud** — data hasil restore diberi `updated_at` baru agar menang LWW dan terunggah ulang.
+- **ID catatan harian bertabrakan antar akun** — ID kini `note-<user_id>-<tanggal>`.
+- **Data lokal tertimpa saat pindah mode** — ID lokal dan hash password dipertahankan; ID catatan lama dimigrasikan otomatis.
+
+### Changed
+- **Dependency keamanan** — DOMPurify 3.4.17, Tiptap 3.32.0, Vite 7.3.7, Vitest 4.1.12, dan jsdom 30.1.3; `npm audit` melaporkan 0 vulnerability.
+
+### Migration
+- Jalankan ulang bagian 7 di `docs/supabase-setup.sql` untuk memigrasikan ID `daily_notes` lama. Kolom `photo_data` tidak lagi dipakai; foto lokal disimpan di `photo_paths`.
+
 ## [0.10.0] - 2026-08-20
 
 ### Added

@@ -5,7 +5,7 @@ import { writeFile } from "@tauri-apps/plugin-fs";
 import type { Category, LogbookEntry } from "./types";
 import type { Lang } from "./i18n";
 import { t } from "./i18n";
-import { formatTanggal } from "./dates";
+import { formatTanggal, todayIso } from "./dates";
 import { looksLikeHtml } from "./richtext";
 import { drawRichLines, layoutForCell, layoutRich, type RichLine } from "./pdfRich";
 
@@ -53,7 +53,7 @@ export function buildPdf(
   doc.setTextColor(100);
   doc.text(rangeLabel, 14, 23);
   doc.text(
-    `${t(lang, "pdf.exportedAt")}: ${formatTanggal(new Date().toISOString().slice(0, 10), lang)} · ${t(
+    `${t(lang, "pdf.exportedAt")}: ${formatTanggal(todayIso(), lang)} · ${t(
       lang,
       "pdf.count",
       { n: entries.length }

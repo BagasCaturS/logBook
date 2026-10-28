@@ -29,7 +29,6 @@ interface Props {
   supabaseUrl: string;
   mode: "supabase" | "local";
   localPasswordHash?: string;
-  _localUserId?: string;
   updateInfo: UpdateInfo | null;
   updateState: string;
   updateError: string | null;
@@ -47,7 +46,6 @@ interface Props {
   onBack: () => void;
   onSwitchMode: (toLocal: boolean) => void;
   onChangeLocalPassword: (current: string, newPass: string) => Promise<string | null>;
-  _onCreateLocalPassword: (password: string) => Promise<string | null>;
 }
 
 export default function SettingsView({
@@ -68,7 +66,6 @@ export default function SettingsView({
   supabaseUrl,
   mode,
   localPasswordHash,
-  _localUserId,
   updateInfo,
   updateState,
   updateError,
@@ -86,11 +83,7 @@ export default function SettingsView({
   onBack,
   onSwitchMode,
   onChangeLocalPassword,
-  _onCreateLocalPassword,
 }: Props) {
-  // Suppress unused destructured vars (reserved for future use)
-  void _localUserId;
-  void _onCreateLocalPassword;
   const [draft, setDraft] = useState(startDate);
   const dirty = draft !== startDate;
   const [hourDraft, setHourDraft] = useState(hourStart);
@@ -602,6 +595,12 @@ export default function SettingsView({
                 </div>
               </div>
             )}
+            <div className="row actions">
+              <button className="secondary" onClick={onLogout}>
+                <IconLogout size={15} />
+                {t(lang, "settings.logout")}
+              </button>
+            </div>
           </div>
         )}
       </section>

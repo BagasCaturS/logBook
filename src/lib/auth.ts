@@ -77,14 +77,3 @@ export function createLocalSession(settings: AppSettings): { userId: string; isL
 export function generateUserId(): string {
   return crypto.randomUUID();
 }
-
-/** Set localUserId dari Supabase UID saat switch ke local (jika ada) */
-export function setLocalUserIdFromSupabase(settings: AppSettings, supabaseUserId: string): AppSettings {
-  return {
-    ...settings,
-    mode: "local",
-    localUserId: supabaseUserId,
-    // password hash tidak di-set otomatis — user harus buat password baru
-    localPasswordHash: undefined,
-  };
-}

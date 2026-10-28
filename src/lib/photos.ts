@@ -1,4 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { listEntries, updateEntry } from "./db";
+import { isCleanupCandidate } from "./syncLogic";
 
 export const PHOTO_BUCKET = "entry-files";
 export const MAX_PHOTOS = 5;
@@ -67,13 +69,23 @@ async function blobToBase64(blob: Blob): Promise<string> {
   });
 }
 
+const LOCAL_PREFIX = "local:";
+const LEGACY_LOCAL_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}:/i;
+
+export function isLocalPhoto(path: string): boolean {
+  return path.startsWith(LOCAL_PREFIX);
+}
+
 /** Upload foto ke Supabase Storage (mode supabase) */
 export async function uploadPhoto(
   client: SupabaseClient,
   userId: string,
   file: File
 ): Promise<string> {
-  const blob = await compressImage(file);
+  return uploadBlob(client, userId, await compressImage(file));
+}
+
+async function uploadBlob(client: SupabaseClient, userId: string, blob: Blob): Promise<string> {
   const path = `${userId}/${crypto.randomUUID()}.jpg`;
   const { error } = await client.storage
     .from(PHOTO_BUCKET)
@@ -84,42 +96,36 @@ export async function uploadPhoto(
 
 /** Simpan foto ke SQLite sebagai base64 (mode lokal) */
 export async function savePhotoLocal(file: File): Promise<string> {
-  const blob = await compressImage(file);
-  const base64 = await blobToBase64(blob);
-  const localId = `local:${crypto.randomUUID()}`;
-  return `${localId}:${base64}`;
+  return `${LOCAL_PREFIX}${await blobToBase64(await compressImage(file))}`;
 }
 
-/** Hapus foto lokal (base64 di SQLite) — tidak perlu aksi khusus, cukup hapus referensi */
-export async function deletePhotosLocal(_paths: string[]): Promise<void> {
-  // base64 disimpan di kolom photo_data, dihapus saat entri dihapus/diupdate
-  // fungsi ini no-op untuk konsistensi API
-  return;
+/** Upload foto lokal (base64) ke storage saat beralih ke mode Supabase. */
+export async function uploadLocalPhoto(
+  client: SupabaseClient,
+  userId: string,
+  path: string
+): Promise<string> {
+  const base64 = getLocalPhotoBase64(path);
+  if (!base64) throw new Error("Foto lokal tidak valid");
+  const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+  return uploadBlob(client, userId, new Blob([bytes], { type: "image/jpeg" }));
 }
 
-/** Dapatkan URL untuk tampilkan foto (mode supabase: URL storage, mode lokal: data URL base64) */
+/** Dapatkan URL untuk tampilkan foto (lokal: data URL, cloud: URL storage) */
 export function getPhotoUrl(settings: { mode: "supabase" | "local"; supabaseUrl: string }, path: string): string {
-  if (settings.mode === "local") {
-    // path format: "local:<uuid>:<base64>"
-    const prefix = "local:";
-    if (path.startsWith(prefix)) {
-      const base64 = path.slice(prefix.length);
-      return `data:image/jpeg;base64,${base64}`;
-    }
-    // fallback untuk path lama
-    return "";
+  if (isLocalPhoto(path)) {
+    const base64 = getLocalPhotoBase64(path);
+    return base64 ? `data:image/jpeg;base64,${base64}` : "";
   }
-  // supabase mode
-  return photoUrl(settings.supabaseUrl, path);
+  return settings.supabaseUrl ? photoUrl(settings.supabaseUrl, path) : "";
 }
 
-/** Ekstrak base64 dari path lokal */
+/** Ekstrak base64 dari path lokal (mendukung format lama local:<uuid>:<base64>) */
 export function getLocalPhotoBase64(path: string): string | null {
-  const prefix = "local:";
-  if (path.startsWith(prefix)) {
-    return path.slice(prefix.length);
-  }
-  return null;
+  if (!isLocalPhoto(path)) return null;
+  const rest = path.slice(LOCAL_PREFIX.length);
+  const legacy = LEGACY_LOCAL_RE.exec(rest);
+  return legacy ? rest.slice(legacy[0].length) : rest;
 }
 
 export async function deletePhotos(
@@ -133,16 +139,19 @@ export async function deletePhotos(
   }
 }
 
-/** Daftar semua path foto di folder milik user (folder pertama = user_id). */
+/** Daftar semua photo di folder milik user beserta waktu upload. */
 export async function listPhotoPaths(
   client: SupabaseClient,
   userId: string
-): Promise<string[]> {
+): Promise<{ path: string; createdAt: string }[]> {
   const { data, error } = await client.storage
     .from(PHOTO_BUCKET)
     .list(userId, { limit: 1000 });
   if (error) throw error;
-  return (data ?? []).map((f) => `${userId}/${f.name}`);
+  return (data ?? []).map((f) => ({
+    path: `${userId}/${f.name}`,
+    createdAt: f.created_at ?? "",
+  }));
 }
 
 /**
@@ -155,16 +164,46 @@ export async function cleanupOrphanPhotos(
   userId: string,
   referenced: Set<string>
 ): Promise<void> {
-  let paths: string[];
+  let paths: { path: string; createdAt: string }[];
   try {
     paths = await listPhotoPaths(client, userId);
   } catch (e) {
     console.warn("gagal daftar foto storage:", e instanceof Error ? e.message : String(e));
     return;
   }
-  const orphans = paths.filter((p) => !referenced.has(p));
+  const orphans = paths
+    .filter((p) => !referenced.has(p.path) && isCleanupCandidate(p.createdAt))
+    .map((p) => p.path);
   if (orphans.length > 0) {
     await deletePhotos(client, orphans);
+  }
+}
+
+/** Salin foto cloud ke Base64 lokal sebelum pindah ke mode lokal (butuh internet). */
+export async function downloadCloudPhotosToLocal(
+  userId: string,
+  supabaseUrl: string
+): Promise<void> {
+  for (const entry of await listEntries(userId)) {
+    const current = entry.photo_paths ?? [];
+    if (!current.some((p) => !isLocalPhoto(p))) continue;
+    const next: string[] = [];
+    for (const path of current) {
+      if (isLocalPhoto(path)) {
+        next.push(path);
+        continue;
+      }
+      try {
+        const res = await fetch(photoUrl(supabaseUrl, path));
+        if (!res.ok) throw new Error(String(res.status));
+        next.push(`${LOCAL_PREFIX}${await blobToBase64(await res.blob())}`);
+      } catch {
+        next.push(path);
+      }
+    }
+    if (next.some((p, i) => p !== current[i])) {
+      await updateEntry(entry.id, userId, { photo_paths: next });
+    }
   }
 }
 

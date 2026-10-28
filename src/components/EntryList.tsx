@@ -20,7 +20,7 @@ interface Props {
   entries: LogbookEntry[];
   categories: Category[];
   leavingId?: string | null;
-  supabaseUrl: string;
+  resolvePhoto: (path: string) => string;
   lang: Lang;
   hourLabel: string;
   onEdit: (e: LogbookEntry) => void;
@@ -30,7 +30,7 @@ interface Props {
 
 const PAGE_SIZE = 20;
 
-export default function EntryList({ entries, categories, leavingId, supabaseUrl, lang, hourLabel, onEdit, onDelete, onOpenPhoto }: Props) {
+export default function EntryList({ entries, categories, leavingId, resolvePhoto, lang, hourLabel, onEdit, onDelete, onOpenPhoto }: Props) {
   const [filter, setFilter] = useState("");
   const [mingguFilter, setMingguFilter] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
@@ -137,7 +137,7 @@ export default function EntryList({ entries, categories, leavingId, supabaseUrl,
                         })}
                       </div>
                     )}
-                    <PhotoThumbs paths={e.photo_paths ?? []} supabaseUrl={supabaseUrl} onOpen={onOpenPhoto} />
+                    <PhotoThumbs paths={e.photo_paths ?? []} resolvePhoto={resolvePhoto} onOpen={onOpenPhoto} />
                   </div>
                 </div>
               </li>

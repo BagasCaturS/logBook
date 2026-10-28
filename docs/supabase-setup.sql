@@ -220,9 +220,9 @@ END $$;
   -- ------------------------------------------------------------
   -- 4) daily_notes (catatan harian)
   -- ------------------------------------------------------------
-  -- Satu baris per user per tanggal. id deterministic (`note-<tanggal>`)
-  -- agar dua perangkat yang membuat catatan tanggal yang sama tidak
-  -- menghasilkan duplikat (LWW by updated_at).
+-- Satu baris per user per tanggal. id deterministic (`note-<user_id>-<tanggal>`)
+-- agar dua perangkat yang membuat catatan tanggal yang sama tidak
+-- menghasilkan duplikat (LWW by updated_at).
   CREATE TABLE IF NOT EXISTS public.daily_notes (
     id TEXT PRIMARY KEY,
     user_id UUID NOT NULL REFERENCES auth.users (id) ON DELETE CASCADE,
@@ -324,3 +324,52 @@ $$;
 
 REVOKE ALL ON FUNCTION public.check_email_registered(TEXT) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.check_email_registered(TEXT) TO anon, authenticated;
+-- ------------------------------------------------------------
+-- 7) Migration: daily note ids are scoped per user
+-- ------------------------------------------------------------
+-- Old ids were `note-<tanggal>` and collided when two accounts shared a
+-- project. New ids are `note-<user_id>-<tanggal>`. Safe to run repeatedly.
+INSERT INTO public.daily_notes AS n (id, user_id, tanggal, isi, created_at, updated_at, deleted)
+SELECT 'note-' || user_id::text || '-' || tanggal, user_id, tanggal, isi, created_at, updated_at, deleted
+FROM public.daily_notes
+WHERE id = 'note-' || tanggal
+ON CONFLICT (id) DO UPDATE SET
+  isi = EXCLUDED.isi,
+  updated_at = EXCLUDED.updated_at,
+  deleted = EXCLUDED.deleted
+WHERE EXCLUDED.updated_at > n.updated_at;
+
+DELETE FROM public.daily_notes WHERE id = 'note-' || tanggal;
+
+-- ------------------------------------------------------------
+-- 8) Tolak push yang lebih tua dari baris remote (anti-clobber)
+-- ------------------------------------------------------------
+-- Klien memeriksa updated_at sebelum upsert, tetapi ada celah balapan:
+-- baris remote bisa berubah di antara cek dan upsert. Trigger ini membuat
+-- push lama diabaikan (baris remote baru tetap menang).
+CREATE OR REPLACE FUNCTION public.ignore_stale_updates()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  IF NEW.updated_at < OLD.updated_at THEN
+    RETURN NULL;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+DO $$
+DECLARE
+  t text;
+BEGIN
+  FOREACH t IN ARRAY ARRAY['logbook_entries', 'categories', 'daily_notes', 'app_settings']
+  LOOP
+    EXECUTE format('DROP TRIGGER IF EXISTS ignore_stale_updates ON public.%I', t);
+    EXECUTE format(
+      'CREATE TRIGGER ignore_stale_updates BEFORE UPDATE ON public.%I
+       FOR EACH ROW EXECUTE FUNCTION public.ignore_stale_updates()',
+      t
+    );
+  END LOOP;
+END $$;

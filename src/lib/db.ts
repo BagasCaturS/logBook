@@ -54,11 +54,20 @@ interface SettingsRow {
   dirty: number;
 }
 
-let db: Database | null = null;
+let dbPromise: Promise<Database> | null = null;
 
-export async function ensureDb(): Promise<Database> {
-  if (db) return db;
-  db = await Database.load("sqlite:logbook.db");
+function ensureDb(): Promise<Database> {
+  if (!dbPromise) {
+    dbPromise = openDb().catch((err) => {
+      dbPromise = null;
+      throw err;
+    });
+  }
+  return dbPromise;
+}
+
+async function openDb(): Promise<Database> {
+  const db = await Database.load("sqlite:logbook.db");
   await db.execute(`
     CREATE TABLE IF NOT EXISTS logbook_entries (
       id TEXT PRIMARY KEY,
@@ -90,10 +99,6 @@ export async function ensureDb(): Promise<Database> {
   if (!cols.some((c) => c.name === "jam")) {
     await db.execute("ALTER TABLE logbook_entries ADD COLUMN jam INTEGER");
   }
-  // migration: photo_data column (base64 for local mode, added in 0.9.0)
-  if (!cols.some((c) => c.name === "photo_data")) {
-    await db.execute("ALTER TABLE logbook_entries ADD COLUMN photo_data TEXT");
-  }
   await db.execute("CREATE INDEX IF NOT EXISTS idx_entries_user_tanggal ON logbook_entries (user_id, tanggal DESC)");
   await db.execute(`
     CREATE TABLE IF NOT EXISTS categories (
@@ -121,6 +126,24 @@ export async function ensureDb(): Promise<Database> {
     )
   `);
   await db.execute("CREATE INDEX IF NOT EXISTS idx_daily_notes_user_tanggal ON daily_notes (user_id, tanggal DESC)");
+  const legacyNotes = await db.select<NoteRow[]>(
+    "SELECT * FROM daily_notes WHERE id = 'note-' || tanggal"
+  );
+  for (const note of legacyNotes) {
+    const newId = `note-${note.user_id}-${note.tanggal}`;
+    const existing = await db.select<NoteRow[]>("SELECT * FROM daily_notes WHERE id = $1", [newId]);
+    if (existing.length === 0) {
+      await db.execute("UPDATE daily_notes SET id = $1 WHERE id = $2", [newId, note.id]);
+    } else {
+      if (note.updated_at > existing[0].updated_at) {
+        await db.execute(
+          "UPDATE daily_notes SET isi = $1, deleted = $2, updated_at = $3 WHERE id = $4",
+          [note.isi, note.deleted, note.updated_at, newId]
+        );
+      }
+      await db.execute("DELETE FROM daily_notes WHERE id = $1", [note.id]);
+    }
+  }
   await db.execute(`
     CREATE TABLE IF NOT EXISTS app_settings (
       user_id TEXT PRIMARY KEY,
@@ -185,6 +208,43 @@ export async function listEntries(userId: string): Promise<LogbookEntry[]> {
     `SELECT * FROM logbook_entries WHERE user_id = $1 AND deleted = 0
      ORDER BY tanggal DESC, created_at DESC`,
     [userId]
+  );
+  return rows.map(mapRow);
+}
+
+/** Entri hidup yang masih menyimpan foto Base64 lokal (perlu diunggah saat pindah ke Supabase). */
+export async function listEntriesWithLocalPhotos(userId: string): Promise<LogbookEntry[]> {
+  const d = await ensureDb();
+  const rows = await d.select<Row[]>(
+    `SELECT * FROM logbook_entries
+     WHERE user_id = $1 AND deleted = 0 AND photo_paths LIKE '%local:%'`,
+    [userId]
+  );
+  return rows.map(mapRow);
+}
+
+/** Hapus tombstone lama. includeDirty=true khusus mode lokal (tidak ada push). */
+export async function purgeTombstones(
+  userId: string,
+  cutoffIso: string,
+  includeDirty = false
+): Promise<void> {
+  const d = await ensureDb();
+  const dirtyGuard = includeDirty ? "" : " AND dirty = 0";
+  for (const table of ["logbook_entries", "categories", "daily_notes"]) {
+    await d.execute(
+      `DELETE FROM ${table} WHERE user_id = $1 AND deleted = 1${dirtyGuard} AND updated_at < $2`,
+      [userId, cutoffIso]
+    );
+  }
+}
+
+/** Tombstone yang masih dalam masa undo; fotonya belum boleh dibersihkan. */
+export async function listDeletedEntriesSince(userId: string, cutoffIso: string): Promise<LogbookEntry[]> {
+  const d = await ensureDb();
+  const rows = await d.select<Row[]>(
+    "SELECT * FROM logbook_entries WHERE user_id = $1 AND deleted = 1 AND updated_at > $2",
+    [userId, cutoffIso]
   );
   return rows.map(mapRow);
 }
@@ -474,7 +534,7 @@ export async function saveDailyNote(
   isi: string
 ): Promise<DailyNote | null> {
   const d = await ensureDb();
-  const id = noteIdFor(tanggal);
+  const id = noteIdFor(userId, tanggal);
   const text = isi.trim();
   const existing = await getDailyNote(id, userId);
   const now = nowIso();
@@ -665,6 +725,7 @@ export interface BackupData {
 /** Import data dari backup (merge by id). Semua di-mark dirty agar disinkronkan ulang. */
 export async function importAll(data: BackupData, userId: string): Promise<void> {
   const d = await ensureDb();
+  const restoredAt = nowIso();
   for (const e of data.entries ?? []) {
     if (!e || typeof e.id !== "string") continue;
     await d.execute(
@@ -692,8 +753,8 @@ export async function importAll(data: BackupData, userId: string): Promise<void>
         e.jam ?? null,
         JSON.stringify(e.category_ids ?? []),
         JSON.stringify(e.photo_paths ?? []),
-        e.created_at ?? nowIso(),
-        e.updated_at ?? nowIso(),
+        e.created_at ?? restoredAt,
+        restoredAt,
       ]
     );
   }
@@ -709,7 +770,7 @@ export async function importAll(data: BackupData, userId: string): Promise<void>
          updated_at = excluded.updated_at,
          deleted = 0,
          dirty = 1`,
-      [c.id, userId, c.name ?? "", c.color ?? "#6366f1", c.created_at ?? nowIso(), c.updated_at ?? nowIso()]
+      [c.id, userId, c.name ?? "", c.color ?? "#6366f1", c.created_at ?? restoredAt, restoredAt]
     );
   }
   for (const n of data.notes ?? []) {
@@ -723,7 +784,7 @@ export async function importAll(data: BackupData, userId: string): Promise<void>
          updated_at = excluded.updated_at,
          deleted = 0,
          dirty = 1`,
-      [n.id, userId, n.tanggal ?? "", n.isi ?? "", n.created_at ?? nowIso(), n.updated_at ?? nowIso()]
+      [n.id, userId, n.tanggal ?? "", n.isi ?? "", n.created_at ?? restoredAt, restoredAt]
     );
   }
 }

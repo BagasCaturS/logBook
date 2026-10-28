@@ -16,6 +16,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   supabaseAnonKey: "",
   startDate: "",
   lastSyncAt: null,
+  syncWatermark: null,
   theme: DEFAULT_THEME,
   lang: "id",
   hourStart: DEFAULT_HOUR_START,
@@ -23,6 +24,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   mode: "supabase",          // "supabase" | "local"
   localUserId: undefined,
   localPasswordHash: undefined,
+  localRemember: false,
 };
 
 export function normalizeUrl(url: string): string {
@@ -51,10 +53,16 @@ export function normalizeSettings(stored: Partial<AppSettings>): AppSettings {
       typeof stored.hourLabel === "string" && stored.hourLabel.trim()
         ? stored.hourLabel.trim()
         : DEFAULT_HOUR_LABEL,
+    // versi lama memakai lastSyncAt sebagai watermark sekaligus waktu tampil
+    syncWatermark:
+      typeof stored.syncWatermark === "string"
+        ? stored.syncWatermark
+        : stored.lastSyncAt ?? null,
     // mode lokal: default "supabase" untuk backward compat
     mode: stored.mode === "local" ? "local" : "supabase",
     localUserId: stored.localUserId ?? undefined,
     localPasswordHash: stored.localPasswordHash ?? undefined,
+    localRemember: stored.localRemember === true,
   };
   return base as AppSettings;
 }

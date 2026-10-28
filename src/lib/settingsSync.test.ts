@@ -40,6 +40,11 @@ describe("normalizeSettings credentials", () => {
     expect(normalizeUrl("  https://b.supabase.co  ")).toBe("https://b.supabase.co");
     expect(normalizeUrl("")).toBe("");
   });
+
+  it("defaults local remember to false", () => {
+    expect(normalizeSettings({}).localRemember).toBe(false);
+    expect(normalizeSettings({ localRemember: true }).localRemember).toBe(true);
+  });
 });
 
 describe("applyRemoteSettings", () => {
