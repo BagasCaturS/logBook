@@ -3,6 +3,7 @@ import type { Category, EntryInput, LogbookEntry } from "../lib/types";
 import { computeMinggu, hoursElapsed, todayIso } from "../lib/dates";
 import { t, type Lang } from "../lib/i18n";
 import { MAX_PHOTOS, isBigFile, type PhotoOps } from "../lib/photos";
+import { groupPhotos, photoStorageOf, type PhotoStorage } from "../lib/photoPaths";
 import { errMessage } from "../lib/sync";
 import { plainTextFromHtml, sanitizeHtml } from "../lib/richtext";
 import RichEditor from "./RichEditor";
@@ -16,6 +17,9 @@ interface Props {
   categories: Category[];
   resolvePhoto: (path: string) => string;
   lang: Lang;
+  localMode: boolean;
+  photoStorage: PhotoStorage;
+  onPhotoStorageChange: (storage: PhotoStorage) => void;
   onSave: (input: EntryInput, id: string | null, photoOps: PhotoOps) => Promise<void>;
   onCreateCategory: (name: string) => Promise<Category | undefined>;
   onCancel: () => void;
@@ -30,6 +34,9 @@ export default function EntryForm({
   categories,
   resolvePhoto,
   lang,
+  localMode,
+  photoStorage,
+  onPhotoStorageChange,
   onSave,
   onCreateCategory,
   onCancel,
@@ -45,8 +52,8 @@ export default function EntryForm({
   const [error, setError] = useState<string | null>(null);
   const [savedPhase, setSavedPhase] = useState<"show" | "leave" | null>(null);
   const [keptPaths, setKeptPaths] = useState<string[]>([]);
-  const [removedPaths, setRemovedPaths] = useState<string[]>([]);
-  const [newFiles, setNewFiles] = useState<File[]>([]);
+  const [newFiles, setNewFiles] = useState<{ file: File; storage: PhotoStorage }[]>([]);
+  const [conversions, setConversions] = useState<{ key: string; to: PhotoStorage }[]>([]);
   const [bigFileNote, setBigFileNote] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -70,7 +77,7 @@ export default function EntryForm({
     }
     setShowNewCategory(false);
     setNewCategoryName("");
-    setRemovedPaths([]);
+    setConversions([]);
     setNewFiles([]);
     setBigFileNote(false);
     setError(null);
@@ -89,6 +96,8 @@ export default function EntryForm({
   }, [savedPhase]);
 
   const auto = useMemo(() => computeMinggu(tanggal, startDate), [tanggal, startDate]);
+  const keptGroups = useMemo(() => groupPhotos(keptPaths), [keptPaths]);
+  const chosenStorage: PhotoStorage = localMode ? "local" : photoStorage;
 
   function handleTanggalChange(v: string) {
     setTanggal(v);
@@ -107,7 +116,7 @@ export default function EntryForm({
     if (!list || list.length === 0) return;
     const imgs = Array.from(list).filter((f) => f.type.startsWith("image/"));
     if (imgs.length === 0) return;
-    const total = keptPaths.length + newFiles.length;
+    const total = keptGroups.length + newFiles.length;
     const room = MAX_PHOTOS - total;
     if (room <= 0) {
       setError(t(lang, "photo.maxReached", { n: MAX_PHOTOS }));
@@ -118,17 +127,30 @@ export default function EntryForm({
       setError(t(lang, "photo.maxReached", { n: MAX_PHOTOS }));
     }
     setBigFileNote((prev) => prev || accept.some(isBigFile));
-    setNewFiles((prev) => [...prev, ...accept]);
+    setNewFiles((prev) => [
+      ...prev,
+      ...accept.map((file) => ({ file, storage: chosenStorage })),
+    ]);
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
-  function removeKept(path: string) {
-    setKeptPaths((prev) => prev.filter((p) => p !== path));
-    setRemovedPaths((prev) => [...prev, path]);
+  function removeKept(groupKey: string) {
+    const group = keptGroups.find((g) => g.key === groupKey);
+    if (!group) return;
+    setKeptPaths((prev) => prev.filter((p) => !group.paths.includes(p)));
+    setConversions((prev) => prev.filter((c) => c.key !== groupKey));
   }
 
-  function removeNew(file: File) {
-    setNewFiles((prev) => prev.filter((f) => f !== file));
+  function removeNew(index: number) {
+    setNewFiles((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  function changeStorage(groupKey: string, to: PhotoStorage) {
+    const group = keptGroups.find((g) => g.key === groupKey);
+    setConversions((prev) => {
+      const rest = prev.filter((c) => c.key !== groupKey);
+      return group && to !== photoStorageOf(group) ? [...rest, { key: groupKey, to }] : rest;
+    });
   }
 
   async function createCategory() {
@@ -184,11 +206,11 @@ export default function EntryForm({
           photo_paths: keptPaths,
         },
         editing?.id ?? null,
-        { added: newFiles, removed: removedPaths }
+        { added: newFiles, conversions }
       );
       setSavedPhase("show");
     } catch (e) {
-      setError(t(lang, "photo.uploadError", { error: errMessage(e) }));
+      setError(t(lang, "photo.saveError", { error: errMessage(e) }));
     } finally {
       setBusy(false);
     }
@@ -290,11 +312,31 @@ export default function EntryForm({
       </div>
       <div className="photo-picker">
         <span className="cat-label">{t(lang, "photo.label", { n: MAX_PHOTOS })}</span>
+        {!localMode && (
+          <div className="photo-storage" role="group" aria-label={t(lang, "photo.storage")}>
+            {(["local", "cloud", "both"] as const).map((s) => (
+              <button
+                key={s}
+                type="button"
+                className={`cat-chip storage-chip${photoStorage === s ? " active" : ""}`}
+                aria-pressed={photoStorage === s}
+                onClick={() => onPhotoStorageChange(s)}
+              >
+                {t(lang, `photo.${s}`)}
+              </button>
+            ))}
+          </div>
+        )}
+        {!localMode && photoStorage !== "cloud" && (
+          <p className="hint">
+            {t(lang, photoStorage === "both" ? "photo.bothHint" : "photo.localOnlyHint")}
+          </p>
+        )}
         <div className="row actions">
           <button
             type="button"
             className="secondary"
-            disabled={busy || keptPaths.length + newFiles.length >= MAX_PHOTOS}
+            disabled={busy || keptGroups.length + newFiles.length >= MAX_PHOTOS}
             onClick={() => fileInputRef.current?.click()}
           >
             {t(lang, "photo.add")}
@@ -309,28 +351,51 @@ export default function EntryForm({
           />
         </div>
         {bigFileNote && <p className="hint">{t(lang, "photo.bigFile")}</p>}
-        {keptPaths.length + newFiles.length > 0 && (
+        {keptGroups.length + newFiles.length > 0 && (
           <div className="photo-grid form-photos">
-            {keptPaths.map((p) => (
-              <div key={p} className="photo-item">
-                {resolvePhoto(p) && <img src={resolvePhoto(p)} alt="" loading="lazy" />}
+            {keptGroups.map((g) => {
+              const target = conversions.find((c) => c.key === g.key)?.to ?? photoStorageOf(g);
+              const display = g.local ?? g.cloud ?? "";
+              return (
+                <div key={g.key} className="photo-item">
+                  {resolvePhoto(display) && (
+                    <img src={resolvePhoto(display)} alt="" loading="lazy" />
+                  )}
+                  {!localMode && (
+                    <select
+                      className="photo-convert"
+                      value={target}
+                      disabled={busy}
+                      aria-label={t(lang, "photo.convert")}
+                      onChange={(e) => changeStorage(g.key, e.target.value as PhotoStorage)}
+                    >
+                      <option value="local">{t(lang, "photo.local")}</option>
+                      <option value="cloud">{t(lang, "photo.cloud")}</option>
+                      <option value="both">{t(lang, "photo.both")}</option>
+                    </select>
+                  )}
+                  {localMode && (
+                    <span className="photo-badge">{t(lang, `photo.${photoStorageOf(g)}`)}</span>
+                  )}
+                  <button
+                    type="button"
+                    className="photo-x"
+                    onClick={() => removeKept(g.key)}
+                    aria-label={t(lang, "photo.remove")}
+                  >
+                    ×
+                  </button>
+                </div>
+              );
+            })}
+            {newFiles.map((item, i) => (
+              <div key={`${item.file.name}-${item.file.lastModified}-${i}`} className="photo-item">
+                <img src={URL.createObjectURL(item.file)} alt="" />
+                <span className="photo-badge">{t(lang, `photo.${item.storage}`)}</span>
                 <button
                   type="button"
                   className="photo-x"
-                  onClick={() => removeKept(p)}
-                  aria-label={t(lang, "photo.remove")}
-                >
-                  ×
-                </button>
-              </div>
-            ))}
-            {newFiles.map((f) => (
-              <div key={f.name + f.lastModified} className="photo-item">
-                <img src={URL.createObjectURL(f)} alt="" />
-                <button
-                  type="button"
-                  className="photo-x"
-                  onClick={() => removeNew(f)}
+                  onClick={() => removeNew(i)}
                   aria-label={t(lang, "photo.remove")}
                 >
                   ×

@@ -1,4 +1,5 @@
 import type { Lang } from "./i18n";
+import type { PhotoStorage } from "./photoPaths";
 
 export interface LogbookEntry {
   id: string;
@@ -82,6 +83,7 @@ export interface AppSettings {
   hourStart: string; // HH:MM
   hourLabel: string;
   mode: "supabase" | "local";        // default "supabase"
+  photoStorage: PhotoStorage;        // pilihan default untuk foto baru
   localUserId?: string;              // UUID dari Supabase (reuse saat switch)
   localPasswordHash?: string;        // hash password local (salt:hash hex)
   localRemember?: boolean;           // auto-login mode lokal (opt-in)

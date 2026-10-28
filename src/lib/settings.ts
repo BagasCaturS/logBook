@@ -22,6 +22,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   hourStart: DEFAULT_HOUR_START,
   hourLabel: DEFAULT_HOUR_LABEL,
   mode: "supabase",          // "supabase" | "local"
+  photoStorage: "cloud",
   localUserId: undefined,
   localPasswordHash: undefined,
   localRemember: false,
@@ -60,6 +61,10 @@ export function normalizeSettings(stored: Partial<AppSettings>): AppSettings {
         : stored.lastSyncAt ?? null,
     // mode lokal: default "supabase" untuk backward compat
     mode: stored.mode === "local" ? "local" : "supabase",
+    photoStorage:
+      stored.photoStorage === "local" || stored.photoStorage === "both"
+        ? stored.photoStorage
+        : "cloud",
     localUserId: stored.localUserId ?? undefined,
     localPasswordHash: stored.localPasswordHash ?? undefined,
     localRemember: stored.localRemember === true,

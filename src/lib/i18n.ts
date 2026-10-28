@@ -284,8 +284,22 @@ const dict: Record<string, { id: string; en: string }> = {
   "photo.bigFile": { id: "File besar dikompres otomatis.", en: "Large files are compressed automatically." },
   "photo.maxReached": { id: "Maksimal {n} foto per entri.", en: "Maximum {n} photos per entry." },
   "photo.uploadError": { id: "Gagal mengunggah foto: {error}", en: "Failed to upload photo: {error}" },
+  "photo.saveError": { id: "Gagal menyimpan foto: {error}", en: "Failed to save photo: {error}" },
   "photo.remove": { id: "Hapus", en: "Remove" },
   "photo.close": { id: "Tutup", en: "Close" },
+  "photo.storage": { id: "Penyimpanan foto", en: "Photo storage" },
+  "photo.local": { id: "Lokal", en: "Local" },
+  "photo.cloud": { id: "Cloud", en: "Cloud" },
+  "photo.both": { id: "Keduanya", en: "Both" },
+  "photo.localOnlyHint": {
+    id: "Hanya di perangkat ini, tidak disinkronkan.",
+    en: "This device only, not synced.",
+  },
+  "photo.bothHint": {
+    id: "Keduanya menyimpan dua salinan (lokal + cloud).",
+    en: "Both keeps two copies (local + cloud).",
+  },
+  "photo.convert": { id: "Ubah penyimpanan", en: "Change storage" },
 
   // login
   "login.title": { id: "Login", en: "Login" },

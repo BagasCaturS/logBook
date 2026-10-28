@@ -1,3 +1,5 @@
+import { groupPhotos } from "../lib/photoPaths";
+
 interface Props {
   paths: string[];
   resolvePhoto: (path: string) => string;
@@ -8,11 +10,11 @@ export default function PhotoThumbs({ paths, resolvePhoto, onOpen }: Props) {
   if (!paths || paths.length === 0) return null;
   return (
     <div className="photo-grid">
-      {paths.map((p) => {
-        const url = resolvePhoto(p);
+      {groupPhotos(paths).map((group) => {
+        const url = resolvePhoto(group.local ?? group.cloud ?? "");
         return (
           <button
-            key={p}
+            key={group.key}
             type="button"
             className="photo-thumb"
             disabled={!url}

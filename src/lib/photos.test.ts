@@ -26,6 +26,14 @@ describe("local photo paths", () => {
     expect(getPhotoUrl(cloudSettings, path)).toBe("data:image/jpeg;base64,YWJj");
   });
 
+  it("supports local-only and both markers", () => {
+    const only = "local:only:123e4567-e89b-12d3-a456-426614174000:YWJj";
+    const both = "local:both:123e4567-e89b-12d3-a456-426614174000:YWJj";
+    expect(getLocalPhotoBase64(only)).toBe("YWJj");
+    expect(getLocalPhotoBase64(both)).toBe("YWJj");
+    expect(getPhotoUrl(cloudSettings, both)).toBe("data:image/jpeg;base64,YWJj");
+  });
+
   it("keeps cloud paths as storage URLs", () => {
     expect(getPhotoUrl(cloudSettings, "user/photo.jpg")).toBe(
       "https://abc.supabase.co/storage/v1/object/public/entry-files/user/photo.jpg"

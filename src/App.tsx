@@ -28,14 +28,18 @@ import { plainTextFromHtml } from "./lib/richtext";
 import { checkEmailRegistered, getClient, getCurrentSession, onAuthChange, signIn, signOut, signUp } from "./lib/supabase";
 import { createLocalSession, generateUserId, hashPassword, verifyPassword } from "./lib/auth";
 import {
+  convertPhoto,
   deletePhotos,
   downloadCloudPhotosToLocal,
   getPhotoUrl,
   isLocalPhoto,
+  savePhotoBoth,
   savePhotoLocal,
+  savePhotoOnly,
   uploadPhoto,
   type PhotoOps,
 } from "./lib/photos";
+import { groupPhotos, type PhotoStorage } from "./lib/photoPaths";
 import { loadSettings, normalizeUrl, saveSettings } from "./lib/settings";
 import { syncNow } from "./lib/sync";
 import { DEFAULT_THEME } from "./lib/themes";
@@ -343,31 +347,58 @@ export default function App() {
     const s = settingsRef.current;
     const local = s.mode === "local";
     const client = local ? null : getClient(s);
-    const removed = photoOps?.removed ?? [];
-    const added = photoOps?.added ?? [];
-    const newPaths: string[] = [];
-    for (const f of added) {
+    const original = editing?.photo_paths ?? [];
+    const paths = [...(input.photo_paths ?? [])];
+
+    if (photoOps.conversions.length > 0) {
+      const converted: string[] = [];
+      for (const group of groupPhotos(paths)) {
+        const change = photoOps.conversions.find((c) => c.key === group.key);
+        converted.push(
+          ...(change
+            ? await convertPhoto(client, session.userId, s.supabaseUrl, group, change.to)
+            : group.paths)
+        );
+      }
+      paths.length = 0;
+      paths.push(...converted);
+    }
+
+    for (const { file, storage } of photoOps.added) {
       if (local) {
-        newPaths.push(await savePhotoLocal(f));
+        paths.push(await savePhotoLocal(file));
+      } else if (storage === "local") {
+        paths.push(await savePhotoOnly(file));
       } else {
         if (!client) throw new Error("Supabase belum dikonfigurasi");
-        newPaths.push(await uploadPhoto(client, session.userId, f));
+        paths.push(
+          ...(storage === "both"
+            ? await savePhotoBoth(client, session.userId, file)
+            : [await uploadPhoto(client, session.userId, file)])
+        );
       }
     }
-    const photoPaths = [...(input.photo_paths ?? []), ...newPaths];
-    const fullInput: EntryInput = { ...input, photo_paths: photoPaths };
+
+    const fullInput: EntryInput = { ...input, photo_paths: paths };
     if (id) {
       await updateEntry(id, session.userId, fullInput);
     } else {
       await addEntry(session.userId, fullInput);
     }
     if (!local && client) {
-      await deletePhotos(client, removed.filter((p) => !isLocalPhoto(p)));
+      const removed = original.filter((p) => !isLocalPhoto(p) && !paths.includes(p));
+      await deletePhotos(client, removed);
     }
     await refreshEntries(session.userId);
     setEditing(null);
     setFormDate(null);
     queueSync();
+  }
+
+  function handlePhotoStorageChange(storage: PhotoStorage) {
+    const next = { ...settingsRef.current, photoStorage: storage };
+    saveSettings(next);
+    setSettings(next);
   }
 
   async function handleCreateCategory(name: string) {
@@ -687,6 +718,9 @@ export default function App() {
             categories={categories}
             resolvePhoto={resolvePhoto}
             lang={lang}
+            localMode={settings.mode === "local"}
+            photoStorage={settings.photoStorage}
+            onPhotoStorageChange={handlePhotoStorageChange}
             onSave={handleSaveEntry}
             onCreateCategory={handleCreateCategory}
             onCancel={() => {

@@ -2,6 +2,7 @@ import Database from "@tauri-apps/plugin-sql";
 import type { Category, DailyNote, EntryInput, LogbookEntry } from "./types";
 import { nowIso } from "./dates";
 import { noteIdFor } from "./notes";
+import { mergeLocalPhotos } from "./photoPaths";
 
 interface Row {
   id: string;
@@ -363,6 +364,10 @@ export async function upsertLocal(entry: LogbookEntry): Promise<void> {
     );
     return;
   }
+  const existing = await getEntry(entry.id, entry.user_id);
+  const photoPaths = existing
+    ? mergeLocalPhotos(entry.photo_paths ?? [], existing.photo_paths ?? [])
+    : entry.photo_paths ?? [];
   await d.execute(
     `INSERT INTO logbook_entries (id, user_id, kegiatan, tanggal, minggu, hari_ke, jam, category_ids, photo_paths, created_at, updated_at, deleted, dirty)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 0, 0)
@@ -387,7 +392,7 @@ export async function upsertLocal(entry: LogbookEntry): Promise<void> {
       entry.hari_ke,
       entry.jam,
       JSON.stringify(entry.category_ids ?? []),
-      JSON.stringify(entry.photo_paths ?? []),
+      JSON.stringify(photoPaths),
       entry.created_at,
       entry.updated_at,
     ]

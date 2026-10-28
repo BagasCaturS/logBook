@@ -3,6 +3,21 @@
 Semua perubahan penting pada Online Logbook dicatat di sini.
 Format mengikuti pola `[Versi] - Tanggal`; setiap entri mencatat tambahan (Added), perbaikan (Fixed), dan catatan migrasi (Migration).
 
+## [0.12.0] - 2026-10-28
+
+### Added
+- **Pilihan penyimpanan foto** — saat menambah foto pilih **Lokal** (hanya perangkat ini), **Cloud**, atau **Keduanya** (cloud + cache lokal untuk offline). Pilihan terakhir dipakai sebagai default berikutnya.
+- **Ubah penyimpanan foto lama** — di form edit, tiap foto punya pilihan Lokal/Cloud/Keduanya; perubahan diterapkan saat Simpan dan salinan yang tidak dipakai dibersihkan.
+- **Fallback offline "Keduanya"** — bila unggahan gagal, foto tetap tersimpan lokal dan diunggah otomatis pada sync berikutnya.
+
+### Changed
+- Foto "Keduanya" dipasangkan lewat UUID yang sama, sehingga daftar/kalender hanya menampilkan satu thumbnail per foto.
+- Pindah ke mode lokal menambahkan cache lokal tanpa menghapus path cloud; pindah kembali tidak perlu unggah ulang.
+- Foto "Lokal" tidak pernah disinkronkan; foto mode lokal lama tetap diunggah otomatis saat pindah ke Supabase.
+
+### Migration
+- Tidak ada perubahan skema Supabase. Format path baru kompatibel dengan versi lama dan backup JSON.
+
 ## [0.11.0] - 2026-10-28
 
 ### Fixed

@@ -26,7 +26,8 @@ import {
   type SettingsSyncRow,
 } from "./db";
 import { noteIdFor } from "./notes";
-import { cleanupOrphanPhotos, deletePhotos, isLocalPhoto, uploadLocalPhoto } from "./photos";
+import { cleanupOrphanPhotos, deletePhotos, uploadLocalPhoto } from "./photos";
+import { isLocalPhoto, localPhotoId, localPhotoKind, photoKey } from "./photoPaths";
 import { applyRemoteSettings, saveSettings } from "./settings";
 import { PHOTO_DELETE_GRACE_MS, shouldDeletePhotos } from "./syncLogic";
 import type {
@@ -218,11 +219,37 @@ async function migrateLocalPhotos(client: SupabaseClient, userId: string): Promi
   let failed: unknown;
   for (const entry of await listEntriesWithLocalPhotos(userId)) {
     try {
+      const current = entry.photo_paths ?? [];
+      const cloudKeys = new Set(current.filter((p) => !isLocalPhoto(p)).map(photoKey));
       const paths: string[] = [];
-      for (const path of entry.photo_paths ?? []) {
-        paths.push(isLocalPhoto(path) ? await uploadLocalPhoto(client, userId, path) : path);
+      for (const path of current) {
+        if (!isLocalPhoto(path)) {
+          paths.push(path);
+          continue;
+        }
+        const kind = localPhotoKind(path);
+        // Foto "lokal saja" tidak pernah diunggah.
+        if (kind === "only") {
+          paths.push(path);
+          continue;
+        }
+        // Cache "keduanya" sudah punya pasangan cloud.
+        if (kind === "both" && cloudKeys.has(photoKey(path))) {
+          paths.push(path);
+          continue;
+        }
+        const cloud = await uploadLocalPhoto(
+          client,
+          userId,
+          path,
+          kind === "both" ? localPhotoId(path) ?? undefined : undefined
+        );
+        if (kind === "both") paths.push(cloud, path);
+        else paths.push(cloud);
       }
-      await updateEntry(entry.id, userId, { photo_paths: paths });
+      if (paths.length !== current.length || paths.some((p, i) => p !== current[i])) {
+        await updateEntry(entry.id, userId, { photo_paths: paths });
+      }
     } catch (e) {
       failed = e;
     }

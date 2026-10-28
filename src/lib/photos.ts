@@ -1,6 +1,19 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { listEntries, updateEntry } from "./db";
+import {
+  conversionPlan,
+  groupPhotos,
+  isLocalPhoto,
+  localPhotoBase64,
+  localPhotoId,
+  photoKey,
+  photoStorageOf,
+  type PhotoGroup,
+  type PhotoStorage,
+} from "./photoPaths";
 import { isCleanupCandidate } from "./syncLogic";
+
+export { isLocalPhoto, localPhotoBase64 as getLocalPhotoBase64 } from "./photoPaths";
 
 export const PHOTO_BUCKET = "entry-files";
 export const MAX_PHOTOS = 5;
@@ -10,8 +23,8 @@ export const AGGRESSIVE_QUALITY = 0.5;
 export const BIG_FILE_BYTES = 10 * 1024 * 1024;
 
 export interface PhotoOps {
-  added: File[];
-  removed: string[];
+  added: { file: File; storage: PhotoStorage }[];
+  conversions: { key: string; to: PhotoStorage }[];
 }
 
 export function photoUrl(supabaseUrl: string, path: string): string {
@@ -70,11 +83,6 @@ async function blobToBase64(blob: Blob): Promise<string> {
 }
 
 const LOCAL_PREFIX = "local:";
-const LEGACY_LOCAL_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}:/i;
-
-export function isLocalPhoto(path: string): boolean {
-  return path.startsWith(LOCAL_PREFIX);
-}
 
 /** Upload foto ke Supabase Storage (mode supabase) */
 export async function uploadPhoto(
@@ -85,8 +93,13 @@ export async function uploadPhoto(
   return uploadBlob(client, userId, await compressImage(file));
 }
 
-async function uploadBlob(client: SupabaseClient, userId: string, blob: Blob): Promise<string> {
-  const path = `${userId}/${crypto.randomUUID()}.jpg`;
+async function uploadBlob(
+  client: SupabaseClient,
+  userId: string,
+  blob: Blob,
+  id: string = crypto.randomUUID()
+): Promise<string> {
+  const path = `${userId}/${id}.jpg`;
   const { error } = await client.storage
     .from(PHOTO_BUCKET)
     .upload(path, blob, { contentType: "image/jpeg", upsert: false });
@@ -99,33 +112,49 @@ export async function savePhotoLocal(file: File): Promise<string> {
   return `${LOCAL_PREFIX}${await blobToBase64(await compressImage(file))}`;
 }
 
+/** Simpan foto hanya di perangkat ini (tidak pernah disinkronkan). */
+export async function savePhotoOnly(file: File): Promise<string> {
+  return `local:only:${crypto.randomUUID()}:${await blobToBase64(await compressImage(file))}`;
+}
+
+/** Simpan foto di cloud sekaligus cache lokal (offline). */
+export async function savePhotoBoth(
+  client: SupabaseClient,
+  userId: string,
+  file: File
+): Promise<string[]> {
+  const id = crypto.randomUUID();
+  const blob = await compressImage(file);
+  const base64 = await blobToBase64(blob);
+  const local = `local:both:${id}:${base64}`;
+  try {
+    return [await uploadBlob(client, userId, blob, id), local];
+  } catch {
+    // offline: simpan lokal dulu, sync berikutnya mengunggah ulang
+    return [local];
+  }
+}
+
 /** Upload foto lokal (base64) ke storage saat beralih ke mode Supabase. */
 export async function uploadLocalPhoto(
   client: SupabaseClient,
   userId: string,
-  path: string
+  path: string,
+  id: string = crypto.randomUUID()
 ): Promise<string> {
-  const base64 = getLocalPhotoBase64(path);
+  const base64 = localPhotoBase64(path);
   if (!base64) throw new Error("Foto lokal tidak valid");
   const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
-  return uploadBlob(client, userId, new Blob([bytes], { type: "image/jpeg" }));
+  return uploadBlob(client, userId, new Blob([bytes], { type: "image/jpeg" }), id);
 }
 
 /** Dapatkan URL untuk tampilkan foto (lokal: data URL, cloud: URL storage) */
 export function getPhotoUrl(settings: { mode: "supabase" | "local"; supabaseUrl: string }, path: string): string {
   if (isLocalPhoto(path)) {
-    const base64 = getLocalPhotoBase64(path);
+    const base64 = localPhotoBase64(path);
     return base64 ? `data:image/jpeg;base64,${base64}` : "";
   }
   return settings.supabaseUrl ? photoUrl(settings.supabaseUrl, path) : "";
-}
-
-/** Ekstrak base64 dari path lokal (mendukung format lama local:<uuid>:<base64>) */
-export function getLocalPhotoBase64(path: string): string | null {
-  if (!isLocalPhoto(path)) return null;
-  const rest = path.slice(LOCAL_PREFIX.length);
-  const legacy = LEGACY_LOCAL_RE.exec(rest);
-  return legacy ? rest.slice(legacy[0].length) : rest;
 }
 
 export async function deletePhotos(
@@ -179,32 +208,75 @@ export async function cleanupOrphanPhotos(
   }
 }
 
-/** Salin foto cloud ke Base64 lokal sebelum pindah ke mode lokal (butuh internet). */
+/** Salin foto cloud ke cache lokal (both) sebelum pindah ke mode lokal. */
 export async function downloadCloudPhotosToLocal(
   userId: string,
   supabaseUrl: string
 ): Promise<void> {
   for (const entry of await listEntries(userId)) {
     const current = entry.photo_paths ?? [];
-    if (!current.some((p) => !isLocalPhoto(p))) continue;
+    const groups = groupPhotos(current);
+    if (!groups.some((g) => g.cloud && !g.local)) continue;
     const next: string[] = [];
-    for (const path of current) {
-      if (isLocalPhoto(path)) {
-        next.push(path);
+    for (const group of groups) {
+      if (!group.cloud || group.local) {
+        next.push(...group.paths);
         continue;
       }
       try {
-        const res = await fetch(photoUrl(supabaseUrl, path));
-        if (!res.ok) throw new Error(String(res.status));
-        next.push(`${LOCAL_PREFIX}${await blobToBase64(await res.blob())}`);
+        const id = photoKey(group.cloud);
+        next.push(group.cloud, `local:both:${id}:${await downloadBase64(supabaseUrl, group.cloud)}`);
       } catch {
-        next.push(path);
+        next.push(group.cloud);
       }
     }
-    if (next.some((p, i) => p !== current[i])) {
+    if (next.length !== current.length || next.some((p, i) => p !== current[i])) {
       await updateEntry(entry.id, userId, { photo_paths: next });
     }
   }
+}
+
+/** Ubah penyimpanan satu foto: lokal, cloud, atau keduanya. */
+export async function convertPhoto(
+  client: SupabaseClient | null,
+  userId: string,
+  supabaseUrl: string,
+  group: PhotoGroup,
+  to: PhotoStorage
+): Promise<string[]> {
+  const plan = conversionPlan(photoStorageOf(group), to);
+  if (!plan) return group.paths;
+
+  const id =
+    (group.local && localPhotoId(group.local)) ||
+    (group.cloud && photoKey(group.cloud)) ||
+    crypto.randomUUID();
+  let cloud = group.cloud ?? null;
+  let local = group.local ?? null;
+
+  if (plan.upload) {
+    if (!client) throw new Error("Supabase belum dikonfigurasi");
+    if (!local) throw new Error("Foto lokal tidak ditemukan");
+    cloud = await uploadLocalPhoto(client, userId, local, id);
+  }
+  if (plan.download) {
+    if (!cloud) throw new Error("Foto cloud tidak ditemukan");
+    local = `local:${to === "both" ? "both" : "only"}:${id}:${await downloadBase64(supabaseUrl, cloud)}`;
+  }
+  if (plan.dropLocal) local = null;
+  if (plan.dropCloud) cloud = null;
+  if (local) {
+    const base64 = localPhotoBase64(local) ?? "";
+    if (plan.result === "both") local = `local:both:${id}:${base64}`;
+    if (plan.result === "local") local = `local:only:${id}:${base64}`;
+  }
+  return [cloud, local].filter((p): p is string => !!p);
+}
+
+async function downloadBase64(supabaseUrl: string, path: string): Promise<string> {
+  const res = await fetch(photoUrl(supabaseUrl, path));
+  if (!res.ok) throw new Error(String(res.status));
+  return blobToBase64(await res.blob());
 }
 
 function readAsDataUrl(file: File): Promise<string> {
