@@ -17,6 +17,7 @@ import {
   listDailyNotes,
   listEntries,
   markSettingsChanged,
+  purgeTombstones,
   restoreEntry,
   saveDailyNote,
   updateEntry,
@@ -26,7 +27,15 @@ import { t } from "./lib/i18n";
 import { plainTextFromHtml } from "./lib/richtext";
 import { checkEmailRegistered, getClient, getCurrentSession, onAuthChange, signIn, signOut, signUp } from "./lib/supabase";
 import { createLocalSession, generateUserId, hashPassword, verifyPassword } from "./lib/auth";
-import { deletePhotos, getPhotoUrl, isLocalPhoto, savePhotoLocal, uploadPhoto, type PhotoOps } from "./lib/photos";
+import {
+  deletePhotos,
+  downloadCloudPhotosToLocal,
+  getPhotoUrl,
+  isLocalPhoto,
+  savePhotoLocal,
+  uploadPhoto,
+  type PhotoOps,
+} from "./lib/photos";
 import { loadSettings, normalizeUrl, saveSettings } from "./lib/settings";
 import { syncNow } from "./lib/sync";
 import { DEFAULT_THEME } from "./lib/themes";
@@ -106,10 +115,18 @@ export default function App() {
       await syncNow(client, session?.userId ?? null, s, setSyncStatus);
       // syncNow bisa menulis pengaturan cloud ke localStorage — sinkronkan state
       setSettings(loadSettings());
+      // tarik perubahan dari perangkat lain ke tampilan, bukan hanya DB
+      if (session) {
+        await Promise.all([
+          refreshEntries(session.userId),
+          refreshCategories(session.userId),
+          refreshNotes(session.userId),
+        ]);
+      }
     } finally {
       syncInFlight.current = false;
     }
-  }, [session]);
+  }, [session, refreshEntries, refreshCategories, refreshNotes]);
 
   const queueSync = useCallback(() => {
     if (settingsRef.current.mode !== "supabase") return;
@@ -180,6 +197,14 @@ export default function App() {
     void refreshCategories(session.userId);
     void refreshNotes(session.userId);
     const s = settingsRef.current;
+    if (s.mode === "local") {
+      // mode lokal tidak punya push: tombstone (termasuk foto Base64) boleh dibuang
+      void purgeTombstones(
+        session.userId,
+        new Date(Date.now() - 60_000).toISOString(),
+        true
+      );
+    }
     if (s.mode === "supabase") {
       void runSync();
       const interval = window.setInterval(() => void runSync(), SYNC_INTERVAL_MS);
@@ -282,6 +307,10 @@ export default function App() {
     const s = settingsRef.current;
     if (toLocal === (s.mode === "local")) return;
     if (toLocal) {
+      // foto cloud disalin dulu selagi masih online agar mode lokal benar-benar offline
+      if (s.mode === "supabase" && s.supabaseUrl && session) {
+        await downloadCloudPhotosToLocal(session.userId, s.supabaseUrl);
+      }
       const localUserId = s.localUserId ?? session?.userId ?? generateUserId();
       const next: AppSettings = { ...s, mode: "local", localUserId, localRemember: false };
       saveSettings(next);
@@ -549,14 +578,7 @@ export default function App() {
           <button
             className={`secondary${syncStatus.state === "syncing" ? " syncing" : ""}`}
             disabled={syncStatus.state === "syncing"}
-            onClick={async () => {
-              await runSync();
-              if (session) {
-                await refreshEntries(session.userId);
-                await refreshCategories(session.userId);
-                await refreshNotes(session.userId);
-              }
-            }}
+            onClick={() => void runSync()}
           >
             <IconRefresh size={15} />
             {t(lang, "sync.now")}

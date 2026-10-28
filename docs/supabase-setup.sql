@@ -340,3 +340,36 @@ ON CONFLICT (id) DO UPDATE SET
 WHERE EXCLUDED.updated_at > n.updated_at;
 
 DELETE FROM public.daily_notes WHERE id = 'note-' || tanggal;
+
+-- ------------------------------------------------------------
+-- 8) Tolak push yang lebih tua dari baris remote (anti-clobber)
+-- ------------------------------------------------------------
+-- Klien memeriksa updated_at sebelum upsert, tetapi ada celah balapan:
+-- baris remote bisa berubah di antara cek dan upsert. Trigger ini membuat
+-- push lama diabaikan (baris remote baru tetap menang).
+CREATE OR REPLACE FUNCTION public.ignore_stale_updates()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  IF NEW.updated_at < OLD.updated_at THEN
+    RETURN NULL;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+DO $$
+DECLARE
+  t text;
+BEGIN
+  FOREACH t IN ARRAY ARRAY['logbook_entries', 'categories', 'daily_notes', 'app_settings']
+  LOOP
+    EXECUTE format('DROP TRIGGER IF EXISTS ignore_stale_updates ON public.%I', t);
+    EXECUTE format(
+      'CREATE TRIGGER ignore_stale_updates BEFORE UPDATE ON public.%I
+       FOR EACH ROW EXECUTE FUNCTION public.ignore_stale_updates()',
+      t
+    );
+  END LOOP;
+END $$;

@@ -54,11 +54,20 @@ interface SettingsRow {
   dirty: number;
 }
 
-let db: Database | null = null;
+let dbPromise: Promise<Database> | null = null;
 
-export async function ensureDb(): Promise<Database> {
-  if (db) return db;
-  db = await Database.load("sqlite:logbook.db");
+function ensureDb(): Promise<Database> {
+  if (!dbPromise) {
+    dbPromise = openDb().catch((err) => {
+      dbPromise = null;
+      throw err;
+    });
+  }
+  return dbPromise;
+}
+
+async function openDb(): Promise<Database> {
+  const db = await Database.load("sqlite:logbook.db");
   await db.execute(`
     CREATE TABLE IF NOT EXISTS logbook_entries (
       id TEXT PRIMARY KEY,
@@ -212,6 +221,22 @@ export async function listEntriesWithLocalPhotos(userId: string): Promise<Logboo
     [userId]
   );
   return rows.map(mapRow);
+}
+
+/** Hapus tombstone lama. includeDirty=true khusus mode lokal (tidak ada push). */
+export async function purgeTombstones(
+  userId: string,
+  cutoffIso: string,
+  includeDirty = false
+): Promise<void> {
+  const d = await ensureDb();
+  const dirtyGuard = includeDirty ? "" : " AND dirty = 0";
+  for (const table of ["logbook_entries", "categories", "daily_notes"]) {
+    await d.execute(
+      `DELETE FROM ${table} WHERE user_id = $1 AND deleted = 1${dirtyGuard} AND updated_at < $2`,
+      [userId, cutoffIso]
+    );
+  }
 }
 
 /** Tombstone yang masih dalam masa undo; fotonya belum boleh dibersihkan. */

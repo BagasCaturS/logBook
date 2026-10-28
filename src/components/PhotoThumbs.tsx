@@ -15,10 +15,11 @@ export default function PhotoThumbs({ paths, resolvePhoto, onOpen }: Props) {
             key={p}
             type="button"
             className="photo-thumb"
+            disabled={!url}
             onClick={() => onOpen(url)}
-            aria-label="Foto kegiatan"
+            aria-label={url ? "Foto kegiatan" : "Foto tidak tersedia offline"}
           >
-            <img src={url} alt="" loading="lazy" />
+            {url ? <img src={url} alt="" loading="lazy" /> : null}
           </button>
         );
       })}

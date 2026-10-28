@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { localNewerThan, parseTs, PHOTO_DELETE_GRACE_MS, shouldDeletePhotos } from "./syncLogic";
+import {
+  isCleanupCandidate,
+  localNewerThan,
+  parseTs,
+  PHOTO_CLEANUP_GRACE_MS,
+  PHOTO_DELETE_GRACE_MS,
+  shouldDeletePhotos,
+} from "./syncLogic";
 
 describe("parseTs", () => {
   it("parses valid ISO timestamps", () => {
@@ -55,5 +62,23 @@ describe("shouldDeletePhotos (undo grace)", () => {
   it("keeps photos when the timestamp is invalid or in the future", () => {
     expect(shouldDeletePhotos("garbage", now)).toBe(false);
     expect(shouldDeletePhotos("2026-08-18T10:00:01.000Z", now)).toBe(false);
+  });
+});
+
+describe("isCleanupCandidate (cross-device upload race)", () => {
+  const now = Date.parse("2026-08-18T10:00:00.000Z");
+
+  it("keeps freshly uploaded orphans", () => {
+    expect(isCleanupCandidate(new Date(now - 1000).toISOString(), now)).toBe(false);
+  });
+
+  it("deletes orphans older than the cleanup grace", () => {
+    const old = new Date(now - PHOTO_CLEANUP_GRACE_MS - 1).toISOString();
+    expect(isCleanupCandidate(old, now)).toBe(true);
+  });
+
+  it("keeps entries without a timestamp", () => {
+    expect(isCleanupCandidate("", now)).toBe(false);
+    expect(isCleanupCandidate(undefined, now)).toBe(false);
   });
 });

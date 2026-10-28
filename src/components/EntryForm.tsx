@@ -313,7 +313,7 @@ export default function EntryForm({
           <div className="photo-grid form-photos">
             {keptPaths.map((p) => (
               <div key={p} className="photo-item">
-                <img src={resolvePhoto(p)} alt="" loading="lazy" />
+                {resolvePhoto(p) && <img src={resolvePhoto(p)} alt="" loading="lazy" />}
                 <button
                   type="button"
                   className="photo-x"

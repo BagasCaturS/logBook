@@ -19,6 +19,14 @@ export function localNewerThan(
 
 export const PHOTO_DELETE_GRACE_MS = 15_000;
 
+/** Foto yatim hanya dihapus setelah umur ini, agar upload perangkat lain tidak ikut terhapus. */
+export const PHOTO_CLEANUP_GRACE_MS = 3_600_000;
+
+export function isCleanupCandidate(createdAt: string | null | undefined, now = Date.now()): boolean {
+  const ts = parseTs(createdAt);
+  return ts > 0 && now - ts >= PHOTO_CLEANUP_GRACE_MS;
+}
+
 /** Tombstone yang masih dalam masa undo tidak boleh menghapus fotonya. */
 export function shouldDeletePhotos(updatedAt: string | null, now = Date.now()): boolean {
   const ts = parseTs(updatedAt);

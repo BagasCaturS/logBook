@@ -59,7 +59,7 @@ export default function Login({
   const emailTimer = useRef<number | null>(null);
 
   // Local mode state
-  const [localMode] = useState<"login" | "createPassword" | "changePassword">(
+  const [localMode] = useState<"login" | "createPassword">(
     hasLocalPassword ? "login" : "createPassword"
   );
   const [rememberLocal, setRememberLocal] = useState(localRemember);
@@ -123,7 +123,7 @@ export default function Login({
   }
 
   async function handleLocalSubmit() {
-    if (localMode === "createPassword" || localMode === "changePassword") {
+    if (localMode === "createPassword") {
       if (!localPassword || !confirmPassword) {
         setLocalError(t(lang, "login.errEmpty"));
         return;
@@ -299,18 +299,6 @@ export default function Login({
                 </div>
               )}
 
-              <div className="form-options">
-                {authMode === "login" && (
-                  <label className="checkbox-wrapper">
-                    <input type="checkbox" />
-                    <span>{t(lang, "login.rememberMe")}</span>
-                  </label>
-                )}
-                {authMode === "login" && (
-                  <a href="#" className="forgot-link">{t(lang, "login.forgotPassword")}</a>
-                )}
-              </div>
-
               <button type="submit" className="btn btn-primary btn-block" disabled={busy}>
                 {busy ? (
                   <>
@@ -474,117 +462,6 @@ export default function Login({
                 </>
               )}
 
-              {localMode === "changePassword" && (
-                <>
-                  <div className="form-group">
-                    <label htmlFor="currentPassword" className="form-label">
-                      <IconLock size={16} className="input-icon" />
-                      <span>{t(lang, "settings.currentPassword")}</span>
-                    </label>
-                    <div className="input-wrapper">
-                      <input
-                        id="currentPassword"
-                        type={showLocalPassword ? "text" : "password"}
-                        value={localPassword}
-                        onChange={(e) => setLocalPassword(e.target.value)}
-                        autoFocus
-                        autoComplete="current-password"
-                        placeholder={t(lang, "settings.currentPassword")}
-                        disabled={localBusy}
-                      />
-                      <button
-                        type="button"
-                        className="password-toggle"
-                        onClick={() => setShowLocalPassword(!showLocalPassword)}
-                        aria-label={showLocalPassword ? t(lang, "login.hidePassword") : t(lang, "login.showPassword")}
-                        aria-pressed={showLocalPassword}
-                        disabled={localBusy}
-                      >
-                        {showLocalPassword ? <IconEyeOff size={18} /> : <IconEye size={18} />}
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="form-group">
-                    <label htmlFor="newLocalPassword" className="form-label">
-                      <IconLock size={16} className="input-icon" />
-                      <span>{t(lang, "settings.newLocalPassword")}</span>
-                    </label>
-                    <div className="input-wrapper">
-                      <input
-                        id="newLocalPassword"
-                        type={showLocalPassword ? "text" : "password"}
-                        value={localPassword}
-                        onChange={(e) => setLocalPassword(e.target.value)}
-                        autoComplete="new-password"
-                        placeholder={t(lang, "settings.newLocalPassword")}
-                        disabled={localBusy}
-                      />
-                      <button
-                        type="button"
-                        className="password-toggle"
-                        onClick={() => setShowLocalPassword(!showLocalPassword)}
-                        aria-label={showLocalPassword ? t(lang, "login.hidePassword") : t(lang, "login.showPassword")}
-                        aria-pressed={showLocalPassword}
-                        disabled={localBusy}
-                      >
-                        {showLocalPassword ? <IconEyeOff size={18} /> : <IconEye size={18} />}
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="form-group">
-                    <label htmlFor="confirmNewPassword" className="form-label">
-                      <IconLock size={16} className="input-icon" />
-                      <span>{t(lang, "settings.confirmLocalPassword")}</span>
-                    </label>
-                    <div className="input-wrapper">
-                      <input
-                        id="confirmNewPassword"
-                        type={showConfirmPassword ? "text" : "password"}
-                        value={confirmPassword}
-                        onChange={(e) => setConfirmPassword(e.target.value)}
-                        autoComplete="new-password"
-                        placeholder={t(lang, "settings.confirmLocalPassword")}
-                        disabled={localBusy}
-                      />
-                      <button
-                        type="button"
-                        className="password-toggle"
-                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                        aria-label={showConfirmPassword ? t(lang, "login.hidePassword") : t(lang, "login.showPassword")}
-                        aria-pressed={showConfirmPassword}
-                        disabled={localBusy}
-                      >
-                        {showConfirmPassword ? <IconEyeOff size={18} /> : <IconEye size={18} />}
-                      </button>
-                    </div>
-                  </div>
-
-                  {localError && (
-                    <div className="alert error" role="alert">
-                      {localError}
-                    </div>
-                  )}
-                  {localInfo && (
-                    <div className="alert success" role="status">
-                      {localInfo}
-                    </div>
-                  )}
-
-                  <button type="submit" className="btn btn-primary btn-block" disabled={localBusy}>
-                    {localBusy ? (
-                      <>
-                        <span className="btn-spinner" aria-hidden="true"></span>
-                        {t(lang, "login.processing")}
-                      </>
-                    ) : (
-                      t(lang, "settings.changeLocalPassword")
-                    )}
-                  </button>
-                </>
-              )}
-
               {localMode === "login" && (
                 <>
                   <div className="form-group">
@@ -651,11 +528,9 @@ export default function Login({
               )}
 
               <div className="local-actions">
-                {localMode !== "changePassword" && (
-                  <button type="button" className="link" onClick={() => void onSwitchMode(false)}>
-                    <IconArrowRight size={14} /> {t(lang, "login.supabaseSwitch")}
-                  </button>
-                )}
+                <button type="button" className="link" onClick={() => void onSwitchMode(false)}>
+                  <IconArrowRight size={14} /> {t(lang, "login.supabaseSwitch")}
+                </button>
               </div>
 
               <p className="login-credit">{t(lang, "login.credit")}</p>

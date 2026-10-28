@@ -3,6 +3,23 @@
 Semua perubahan penting pada Online Logbook dicatat di sini.
 Format mengikuti pola `[Versi] - Tanggal`; setiap entri mencatat tambahan (Added), perbaikan (Fixed), dan catatan migrasi (Migration).
 
+## [0.11.0] - 2026-10-28
+
+### Fixed
+- **Tampilan tidak ikut sync** — hasil sync otomatis langsung memperbarui daftar entri, kategori, dan catatan.
+- **Foto perangkat lain ikut terhapus** — pembersihan foto yatim menunggu umur file 1 jam.
+- **Balapan inisialisasi database** — `ensureDb` memakai satu promise bersama saat pertama dibuka.
+- **Push menimpa data lebih baru** — trigger `ignore_stale_updates` menolak update dengan `updated_at` lebih lama.
+- **Baris terlewat saat pull lebih dari 1000** — pagination memakai `range` dengan urutan `updated_at, id`.
+- **Foto cloud tidak tampil di mode lokal** — foto disalin ke Base64 saat beralih mode; placeholder bila gagal.
+- **Status sync menyesatkan** — watermark dipisah dari `lastSyncAt`, jadi waktu sync yang tampil adalah waktu sebenarnya.
+- **Tanggal PDF memakai UTC** — header PDF kini memakai tanggal lokal.
+- **Tombstone menumpuk** — dibersihkan otomatis (30 hari untuk cloud, 1 menit untuk mode lokal).
+- **Kontrol login mati** — "Ingat saya"/"Lupa password" (Supabase) dan cabang ganti password yang tidak terpakai dihapus.
+
+### Migration
+- Jalankan ulang `docs/supabase-setup.sql` untuk mengaktifkan trigger anti-clobber. File `supabase/schema.sql` lama dihapus.
+
 ## [0.10.1] - 2026-10-28
 
 ### Added

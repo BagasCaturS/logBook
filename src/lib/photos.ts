@@ -1,4 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { listEntries, updateEntry } from "./db";
+import { isCleanupCandidate } from "./syncLogic";
 
 export const PHOTO_BUCKET = "entry-files";
 export const MAX_PHOTOS = 5;
@@ -137,16 +139,19 @@ export async function deletePhotos(
   }
 }
 
-/** Daftar semua path foto di folder milik user (folder pertama = user_id). */
+/** Daftar semua photo di folder milik user beserta waktu upload. */
 export async function listPhotoPaths(
   client: SupabaseClient,
   userId: string
-): Promise<string[]> {
+): Promise<{ path: string; createdAt: string }[]> {
   const { data, error } = await client.storage
     .from(PHOTO_BUCKET)
     .list(userId, { limit: 1000 });
   if (error) throw error;
-  return (data ?? []).map((f) => `${userId}/${f.name}`);
+  return (data ?? []).map((f) => ({
+    path: `${userId}/${f.name}`,
+    createdAt: f.created_at ?? "",
+  }));
 }
 
 /**
@@ -159,16 +164,46 @@ export async function cleanupOrphanPhotos(
   userId: string,
   referenced: Set<string>
 ): Promise<void> {
-  let paths: string[];
+  let paths: { path: string; createdAt: string }[];
   try {
     paths = await listPhotoPaths(client, userId);
   } catch (e) {
     console.warn("gagal daftar foto storage:", e instanceof Error ? e.message : String(e));
     return;
   }
-  const orphans = paths.filter((p) => !referenced.has(p));
+  const orphans = paths
+    .filter((p) => !referenced.has(p.path) && isCleanupCandidate(p.createdAt))
+    .map((p) => p.path);
   if (orphans.length > 0) {
     await deletePhotos(client, orphans);
+  }
+}
+
+/** Salin foto cloud ke Base64 lokal sebelum pindah ke mode lokal (butuh internet). */
+export async function downloadCloudPhotosToLocal(
+  userId: string,
+  supabaseUrl: string
+): Promise<void> {
+  for (const entry of await listEntries(userId)) {
+    const current = entry.photo_paths ?? [];
+    if (!current.some((p) => !isLocalPhoto(p))) continue;
+    const next: string[] = [];
+    for (const path of current) {
+      if (isLocalPhoto(path)) {
+        next.push(path);
+        continue;
+      }
+      try {
+        const res = await fetch(photoUrl(supabaseUrl, path));
+        if (!res.ok) throw new Error(String(res.status));
+        next.push(`${LOCAL_PREFIX}${await blobToBase64(await res.blob())}`);
+      } catch {
+        next.push(path);
+      }
+    }
+    if (next.some((p, i) => p !== current[i])) {
+      await updateEntry(entry.id, userId, { photo_paths: next });
+    }
   }
 }
 

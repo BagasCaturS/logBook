@@ -401,7 +401,6 @@ const dict: Record<string, { id: string; en: string }> = {
   "login.modeToggle": { id: "Mode:", en: "Mode:" },
 
   // Enhanced login
-  "login.forgotPassword": { id: "Lupa password?", en: "Forgot password?" },
   "login.rememberMe": { id: "Ingat saya", en: "Remember me" },
   "login.showPassword": { id: "Tampilkan password", en: "Show password" },
   "login.hidePassword": { id: "Sembunyikan password", en: "Hide password" },

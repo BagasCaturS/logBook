@@ -76,6 +76,7 @@ export interface AppSettings {
   supabaseAnonKey: string;
   startDate: string; // YYYY-MM-DD or '' when not set
   lastSyncAt: string | null;
+  syncWatermark: string | null;
   theme: string;
   lang: Lang;
   hourStart: string; // HH:MM
